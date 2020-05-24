@@ -36,6 +36,13 @@ contract BFactory {
     function newBPool() external returns (BPool);
 }
 
+/********************************** WARNING **********************************/
+//                                                                           //
+// This contract is only meant to be used in conjunction with ds-proxy.      //
+// Calling this contract directly will lead to loss of funds.                //
+//                                                                           //
+/********************************** WARNING **********************************/
+
 contract BActions {
 
     function create(
