@@ -22,6 +22,7 @@ contract ERC20 {
 
 contract BPool is ERC20 {
     function isBound(address t) external view returns (bool);
+    function getFinalTokens() external view returns(address[] memory);
     function getBalance(address token) external view returns (uint);
     function setSwapFee(uint swapFee) external;
     function setController(address controller) external;
@@ -30,6 +31,8 @@ contract BPool is ERC20 {
     function bind(address token, uint balance, uint denorm) external;
     function rebind(address token, uint balance, uint denorm) external;
     function unbind(address token) external;
+    function joinPool(uint poolAmountOut, uint[] calldata maxAmountsIn) external;
+    function joinswapExternAmountIn(address tokenIn, uint tokenAmountIn, uint minPoolAmountOut) external returns (uint poolAmountOut);
 }
 
 contract BFactory {
@@ -61,14 +64,14 @@ contract BActions {
 
         for (uint8 i = 0; i < tokens.length; i++) {
             ERC20 token = ERC20(tokens[i]);
-            token.transferFrom(msg.sender, address(this), balances[i]);
+            require(token.transferFrom(msg.sender, address(this), balances[i]), "ERR_TRANSFER_FAILED");
             token.approve(address(pool), balances[i]);
             pool.bind(tokens[i], balances[i], denorms[i]);
         }
 
         if (finalize) {
             pool.finalize();
-            pool.transfer(msg.sender, pool.balanceOf(address(this)));
+            require(pool.transfer(msg.sender, pool.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
         } else {
             pool.setController(address(this));
             pool.setPublicSwap(true);
@@ -88,7 +91,7 @@ contract BActions {
             ERC20 token = ERC20(tokens[i]);
             if (pool.isBound(tokens[i])) {
                 if (balances[i] > pool.getBalance(tokens[i])) {
-                    token.transferFrom(msg.sender, address(this), balances[i] - pool.getBalance(tokens[i]));
+                    require(token.transferFrom(msg.sender, address(this), balances[i] - pool.getBalance(tokens[i])), "ERR_TRANSFER_FAILED");
                     token.approve(address(pool), balances[i] - pool.getBalance(tokens[i]));
                 }
                 if (balances[i] > 0) {
@@ -98,10 +101,10 @@ contract BActions {
                 }
 
                 if (token.balanceOf(address(this)) > 0) {
-                    token.transfer(msg.sender, token.balanceOf(address(this)));
+                    require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
                 }
             } else {
-                token.transferFrom(msg.sender, address(this), balances[i]);
+                require(token.transferFrom(msg.sender, address(this), balances[i]), "ERR_TRANSFER_FAILED");
                 token.approve(address(pool), balances[i]);
                 pool.bind(tokens[i], balances[i], denorms[i]);
             }
@@ -124,5 +127,39 @@ contract BActions {
     function finalize(BPool pool) external {
         pool.finalize();
         pool.transfer(msg.sender, pool.balanceOf(address(this)));
+    }
+
+    function joinPool(
+        BPool pool,
+        uint poolAmountOut,
+        uint[] calldata maxAmountsIn
+    ) external {
+        address[] memory tokens = pool.getFinalTokens();
+        for (uint8 i = 0; i < tokens.length; i++) {
+            ERC20 token = ERC20(tokens[i]);
+            require(token.transferFrom(msg.sender, address(this), maxAmountsIn[i]), "ERR_TRANSFER_FAILED");
+            token.approve(address(pool), maxAmountsIn[i]);
+        }
+        pool.joinPool(poolAmountOut, maxAmountsIn);
+        for (uint8 i = 0; i < tokens.length; i++) {
+            ERC20 token = ERC20(tokens[i]);
+            if (token.balanceOf(address(this)) > 0) {
+                require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+            }
+        }
+        pool.transfer(msg.sender, pool.balanceOf(address(this)));
+    }
+
+    function joinswapExternAmountIn(
+        BPool pool,
+        address tokenIn,
+        uint tokenAmountIn,
+        uint minPoolAmountOut
+    ) external {
+        ERC20 token = ERC20(tokenIn);
+        require(token.transferFrom(msg.sender, address(this), tokenAmountIn), "ERR_TRANSFER_FAILED");
+        token.approve(address(pool), tokenAmountIn);
+        uint poolAmountOut = pool.joinswapExternAmountIn(tokenIn, tokenAmountIn, minPoolAmountOut);
+        require(pool.transfer(msg.sender, poolAmountOut), "ERR_TRANSFER_FAILED");
     }
 }
