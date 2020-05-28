@@ -16,7 +16,7 @@ contract('BActions', async (accounts) => {
 
     const MAX = web3.utils.toTwosComplement(-1);
 
-    describe('Batch Swaps', () => {
+    describe('Setup', () => {
         let factory;
         let FACTORY;
         let proxyFactory;

@@ -15,9 +15,9 @@ pragma solidity 0.5.12;
 
 contract ERC20 {
     function balanceOf(address whom) external view returns (uint);
-    function approve(address spender, uint256 amount) external returns (bool);
+    function approve(address spender, uint amount) external returns (bool);
     function transfer(address dst, uint amt) external returns (bool);
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function transferFrom(address sender, address recipient, uint amount) external returns (bool);
 }
 
 contract BPool is ERC20 {
@@ -116,7 +116,7 @@ contract BActions {
         pool.setPublicSwap(publicSwap);
     }
 
-    function setSwapFee(BPool pool, uint256 newFee) external {
+    function setSwapFee(BPool pool, uint newFee) external {
         pool.setSwapFee(newFee);
     }
 
