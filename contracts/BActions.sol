@@ -32,7 +32,9 @@ contract BPool is ERC20 {
     function rebind(address token, uint balance, uint denorm) external;
     function unbind(address token) external;
     function joinPool(uint poolAmountOut, uint[] calldata maxAmountsIn) external;
-    function joinswapExternAmountIn(address tokenIn, uint tokenAmountIn, uint minPoolAmountOut) external returns (uint poolAmountOut);
+    function joinswapExternAmountIn(
+        address tokenIn, uint tokenAmountIn, uint minPoolAmountOut
+    ) external returns (uint poolAmountOut);
 }
 
 contract BFactory {
@@ -91,7 +93,10 @@ contract BActions {
             ERC20 token = ERC20(tokens[i]);
             if (pool.isBound(tokens[i])) {
                 if (balances[i] > pool.getBalance(tokens[i])) {
-                    require(token.transferFrom(msg.sender, address(this), balances[i] - pool.getBalance(tokens[i])), "ERR_TRANSFER_FAILED");
+                    require(
+                        token.transferFrom(msg.sender, address(this), balances[i] - pool.getBalance(tokens[i])),
+                        "ERR_TRANSFER_FAILED"
+                    );
                     token.approve(address(pool), balances[i] - pool.getBalance(tokens[i]));
                 }
                 if (balances[i] > 0) {
@@ -126,7 +131,7 @@ contract BActions {
 
     function finalize(BPool pool) external {
         pool.finalize();
-        pool.transfer(msg.sender, pool.balanceOf(address(this)));
+        require(pool.transfer(msg.sender, pool.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
     }
 
     function joinPool(

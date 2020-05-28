@@ -1,5 +1,4 @@
 const truffleAssert = require('truffle-assertions');
-const Decimal = require('decimal.js');
 
 const TToken = artifacts.require('TToken');
 const TTokenFactory = artifacts.require('TTokenFactory');
@@ -14,7 +13,6 @@ contract('BActions', async (accounts) => {
     const user1 = accounts[1];
     const { toHex } = web3.utils;
     const { toWei } = web3.utils;
-    const { fromWei } = web3.utils;
 
     const MAX = web3.utils.toTwosComplement(-1);
 
@@ -22,7 +20,6 @@ contract('BActions', async (accounts) => {
         let factory;
         let FACTORY;
         let proxyFactory;
-        let PROXY_FACTORY;
         let bactions;
         let BACTIONS;
         let tokens;
@@ -33,9 +30,7 @@ contract('BActions', async (accounts) => {
         let DAI; let MKR; let ZRX; let WETH;
 
         before(async () => {
-
             proxyFactory = await DSProxyFactory.deployed();
-            PROXY_FACTORY = proxyFactory.address;
 
             bactions = await BActions.deployed();
             BACTIONS = bactions.address;
@@ -76,11 +71,11 @@ contract('BActions', async (accounts) => {
             await zrx.approve(USER_PROXY, MAX);
             await weth.approve(USER_PROXY, MAX);
 
-            let createTokens = [DAI, MKR, WETH];
-            let createBalances = [toWei('400'), toWei('1'), toWei('2')];
-            let createWeights = [toWei('5'), toWei('5'), toWei('5')];
-            let swapFee = toWei('0.03')
-            let finalize = false;
+            const createTokens = [DAI, MKR, WETH];
+            const createBalances = [toWei('400'), toWei('1'), toWei('2')];
+            const createWeights = [toWei('5'), toWei('5'), toWei('5')];
+            const swapFee = toWei('0.03');
+            const finalize = false;
 
             const params = [
                 FACTORY,
@@ -90,24 +85,30 @@ contract('BActions', async (accounts) => {
                 swapFee,
                 finalize,
             ];
- 
-            let functionSig = web3.eth.abi.encodeFunctionSignature('create(address,address[],uint256[],uint256[],uint256,bool)')
-            let functionData = web3.eth.abi.encodeParameters(['address','address[]','uint256[]','uint256[]','uint256','bool'], params);
-    
+
+            const functionSig = web3.eth.abi.encodeFunctionSignature(
+                'create(address,address[],uint256[],uint256[],uint256,bool)',
+            );
+            const functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address[]', 'uint256[]', 'uint256[]', 'uint256', 'bool'],
+                params,
+            );
+
             const argumentData = functionData.substring(2);
             const inputData = `${functionSig}${argumentData}`;
 
-            let poolAddress = await userProxy.methods['execute(address,bytes)'].call(BACTIONS, inputData);
-            POOL = '0x' + poolAddress.slice(-40)
+            const poolAddress = await userProxy.methods['execute(address,bytes)'].call(
+                BACTIONS, inputData,
+            );
+            POOL = `0x${poolAddress.slice(-40)}`;
 
             await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
-
         });
 
         it('rebind add new token', async () => {
-            let rebindTokens = [DAI, MKR, WETH, ZRX];
-            let rebindBalances = [toWei('400'), toWei('1'), toWei('2'), toWei('20')];
-            let rebindWeights = [toWei('5'), toWei('5'), toWei('5'), toWei('5')];
+            const rebindTokens = [DAI, MKR, WETH, ZRX];
+            const rebindBalances = [toWei('400'), toWei('1'), toWei('2'), toWei('20')];
+            const rebindWeights = [toWei('5'), toWei('5'), toWei('5'), toWei('5')];
 
             const params = [
                 POOL,
@@ -115,27 +116,30 @@ contract('BActions', async (accounts) => {
                 rebindBalances,
                 rebindWeights,
             ];
- 
-            let functionSig = web3.eth.abi.encodeFunctionSignature('rebind(address,address[],uint256[],uint256[])')
-            let functionData = web3.eth.abi.encodeParameters(['address','address[]','uint256[]','uint256[]'], params);
-    
+
+            const functionSig = web3.eth.abi.encodeFunctionSignature(
+                'rebind(address,address[],uint256[],uint256[])',
+            );
+            const functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address[]', 'uint256[]', 'uint256[]'],
+                params,
+            );
+
             const argumentData = functionData.substring(2);
             const inputData = `${functionSig}${argumentData}`;
 
             await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
-            
-            let bpool = await BPool.at(POOL)
-            let currentTokens = await bpool.getCurrentTokens();
+
+            const bpool = await BPool.at(POOL);
+            const currentTokens = await bpool.getCurrentTokens();
 
             assert.sameMembers(rebindTokens, currentTokens);
-
-
         });
 
         it('rebind decrease balance token', async () => {
-            let rebindTokens = [DAI, MKR, WETH, ZRX];
-            let rebindBalances = [toWei('400'), toWei('1'), toWei('2'), toWei('10')];
-            let rebindWeights = [toWei('5'), toWei('5'), toWei('5'), toWei('5')];
+            const rebindTokens = [DAI, MKR, WETH, ZRX];
+            const rebindBalances = [toWei('400'), toWei('1'), toWei('2'), toWei('10')];
+            const rebindWeights = [toWei('5'), toWei('5'), toWei('5'), toWei('5')];
 
             const params = [
                 POOL,
@@ -144,32 +148,36 @@ contract('BActions', async (accounts) => {
                 rebindWeights,
             ];
 
-            let initUserZrxBalance = await zrx.balanceOf(admin);
- 
-            let functionSig = web3.eth.abi.encodeFunctionSignature('rebind(address,address[],uint256[],uint256[])')
-            let functionData = web3.eth.abi.encodeParameters(['address','address[]','uint256[]','uint256[]'], params);
-    
+            const initUserZrxBalance = await zrx.balanceOf(admin);
+
+            const functionSig = web3.eth.abi.encodeFunctionSignature(
+                'rebind(address,address[],uint256[],uint256[])',
+            );
+            const functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address[]', 'uint256[]', 'uint256[]'],
+                params,
+            );
+
             const argumentData = functionData.substring(2);
             const inputData = `${functionSig}${argumentData}`;
 
             await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
-            
-            let bpool = await BPool.at(POOL)
-            let poolZrxBalance = await bpool.getBalance(ZRX);
+
+            const bpool = await BPool.at(POOL);
+            const poolZrxBalance = await bpool.getBalance(ZRX);
 
             assert.equal(poolZrxBalance, toWei('10'));
 
-            let newUserZrxBalance = await zrx.balanceOf(admin);
-            let balanceDiff = newUserZrxBalance - initUserZrxBalance;
+            const newUserZrxBalance = await zrx.balanceOf(admin);
+            const balanceDiff = newUserZrxBalance - initUserZrxBalance;
 
             assert.equal(balanceDiff, toWei('10'));
-
         });
 
         it('rebind increase balance token', async () => {
-            let rebindTokens = [DAI, MKR, WETH, ZRX];
-            let rebindBalances = [toWei('400'), toWei('1'), toWei('2'), toWei('25')];
-            let rebindWeights = [toWei('5'), toWei('5'), toWei('5'), toWei('5')];
+            const rebindTokens = [DAI, MKR, WETH, ZRX];
+            const rebindBalances = [toWei('400'), toWei('1'), toWei('2'), toWei('25')];
+            const rebindWeights = [toWei('5'), toWei('5'), toWei('5'), toWei('5')];
 
             const params = [
                 POOL,
@@ -177,26 +185,30 @@ contract('BActions', async (accounts) => {
                 rebindBalances,
                 rebindWeights,
             ];
- 
-            let functionSig = web3.eth.abi.encodeFunctionSignature('rebind(address,address[],uint256[],uint256[])')
-            let functionData = web3.eth.abi.encodeParameters(['address','address[]','uint256[]','uint256[]'], params);
-    
+
+            const functionSig = web3.eth.abi.encodeFunctionSignature(
+                'rebind(address,address[],uint256[],uint256[])',
+            );
+            const functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address[]', 'uint256[]', 'uint256[]'],
+                params,
+            );
+
             const argumentData = functionData.substring(2);
             const inputData = `${functionSig}${argumentData}`;
 
             await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
-            
-            let bpool = await BPool.at(POOL)
-            let poolZrxBalance = await bpool.getBalance(ZRX);
+
+            const bpool = await BPool.at(POOL);
+            const poolZrxBalance = await bpool.getBalance(ZRX);
 
             assert.equal(poolZrxBalance, toWei('25'));
-
         });
 
         it('fails other user interaction', async () => {
-            let rebindTokens = [DAI, MKR, WETH, ZRX];
-            let rebindBalances = [toWei('400'), toWei('1'), toWei('2'), toWei('25')];
-            let rebindWeights = [toWei('5'), toWei('5'), toWei('5'), toWei('5')];
+            const rebindTokens = [DAI, MKR, WETH, ZRX];
+            const rebindBalances = [toWei('400'), toWei('1'), toWei('2'), toWei('25')];
+            const rebindWeights = [toWei('5'), toWei('5'), toWei('5'), toWei('5')];
 
             const params = [
                 POOL,
@@ -204,37 +216,40 @@ contract('BActions', async (accounts) => {
                 rebindBalances,
                 rebindWeights,
             ];
- 
-            let functionSig = web3.eth.abi.encodeFunctionSignature('rebind(address,address[],uint256[],uint256[])')
-            let functionData = web3.eth.abi.encodeParameters(['address','address[]','uint256[]','uint256[]'], params);
-    
+
+            const functionSig = web3.eth.abi.encodeFunctionSignature(
+                'rebind(address,address[],uint256[],uint256[])',
+            );
+            const functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address[]', 'uint256[]', 'uint256[]'],
+                params,
+            );
+
             const argumentData = functionData.substring(2);
             const inputData = `${functionSig}${argumentData}`;
 
             await truffleAssert.reverts(
-                userProxy.methods['execute(address,bytes)'](BACTIONS, inputData, {from: user1}),
-                'ds-auth-unauthorized'
+                userProxy.methods['execute(address,bytes)'](BACTIONS, inputData, { from: user1 }),
+                'ds-auth-unauthorized',
             );
 
-            let bpool = await BPool.at(POOL);
+            const bpool = await BPool.at(POOL);
 
             await truffleAssert.reverts(
                 bpool.rebind(ZRX, toWei('5'), toWei('5')),
-                'ERR_NOT_CONTROLLER'
+                'ERR_NOT_CONTROLLER',
             );
 
             await truffleAssert.reverts(
                 bpool.rebind(ZRX, toWei('5'), toWei('5'), { from: user1 }),
-                'ERR_NOT_CONTROLLER'
+                'ERR_NOT_CONTROLLER',
             );
-        
-
         });
 
         it('unbind token', async () => {
-            let rebindTokens = [DAI, MKR, WETH, ZRX];
-            let rebindBalances = [toWei('400'), toWei('0'), toWei('2'), toWei('25')];
-            let rebindWeights = [toWei('5'), toWei('0'), toWei('5'), toWei('5')];
+            const rebindTokens = [DAI, MKR, WETH, ZRX];
+            const rebindBalances = [toWei('400'), toWei('0'), toWei('2'), toWei('25')];
+            const rebindWeights = [toWei('5'), toWei('0'), toWei('5'), toWei('5')];
 
             const params = [
                 POOL,
@@ -243,28 +258,30 @@ contract('BActions', async (accounts) => {
                 rebindWeights,
             ];
 
-            let initUserMkrBalance = await mkr.balanceOf(admin);
- 
-            let functionSig = web3.eth.abi.encodeFunctionSignature('rebind(address,address[],uint256[],uint256[])')
-            let functionData = web3.eth.abi.encodeParameters(['address','address[]','uint256[]','uint256[]'], params);
-    
+            const initUserMkrBalance = await mkr.balanceOf(admin);
+
+            const functionSig = web3.eth.abi.encodeFunctionSignature(
+                'rebind(address,address[],uint256[],uint256[])',
+            );
+            const functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address[]', 'uint256[]', 'uint256[]'],
+                params,
+            );
+
             const argumentData = functionData.substring(2);
             const inputData = `${functionSig}${argumentData}`;
 
             await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
 
-            let bpool = await BPool.at(POOL)
-            let currentTokens = await bpool.getCurrentTokens();
+            const bpool = await BPool.at(POOL);
+            const currentTokens = await bpool.getCurrentTokens();
 
             assert.sameMembers(currentTokens, [DAI, WETH, ZRX]);
 
-            let newUserMkrBalance = await mkr.balanceOf(admin);
-            let balanceDiff = newUserMkrBalance - initUserMkrBalance;
+            const newUserMkrBalance = await mkr.balanceOf(admin);
+            const balanceDiff = newUserMkrBalance - initUserMkrBalance;
 
             assert.equal(balanceDiff, toWei('1'));
-
         });
-
-
     });
 });

@@ -1,5 +1,3 @@
-const Decimal = require('decimal.js');
-
 const TToken = artifacts.require('TToken');
 const TTokenFactory = artifacts.require('TTokenFactory');
 const BFactory = artifacts.require('BFactory');
@@ -20,7 +18,6 @@ contract('BActions', async (accounts) => {
         let factory;
         let FACTORY;
         let proxyFactory;
-        let PROXY_FACTORY;
         let bactions;
         let BACTIONS;
         let tokens;
@@ -30,9 +27,7 @@ contract('BActions', async (accounts) => {
         let DAI; let MKR;
 
         before(async () => {
-
             proxyFactory = await DSProxyFactory.deployed();
-            PROXY_FACTORY = proxyFactory.address;
 
             bactions = await BActions.deployed();
             BACTIONS = bactions.address;
@@ -62,15 +57,14 @@ contract('BActions', async (accounts) => {
 
             await dai.approve(USER_PROXY, MAX);
             await mkr.approve(USER_PROXY, MAX);
-
         });
 
         it('deploy pool through proxy', async () => {
-            let createTokens = [DAI, MKR];
-            let createBalances = [toWei('10'), toWei('1')];
-            let createWeights = [toWei('5'), toWei('5')];
-            let swapFee = toWei('0.03')
-            let finalize = true;
+            const createTokens = [DAI, MKR];
+            const createBalances = [toWei('10'), toWei('1')];
+            const createWeights = [toWei('5'), toWei('5')];
+            const swapFee = toWei('0.03');
+            const finalize = true;
 
             const params = [
                 FACTORY,
@@ -80,32 +74,35 @@ contract('BActions', async (accounts) => {
                 swapFee,
                 finalize,
             ];
- 
-            let functionSig = web3.eth.abi.encodeFunctionSignature('create(address,address[],uint256[],uint256[],uint256,bool)')
-            let functionData = web3.eth.abi.encodeParameters(['address','address[]','uint256[]','uint256[]','uint256','bool'], params);
-    
+
+            const functionSig = web3.eth.abi.encodeFunctionSignature(
+                'create(address,address[],uint256[],uint256[],uint256,bool)',
+            );
+            const functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address[]', 'uint256[]', 'uint256[]', 'uint256', 'bool'],
+                params,
+            );
+
             const argumentData = functionData.substring(2);
             const inputData = `${functionSig}${argumentData}`;
 
             let poolAddress = await userProxy.methods['execute(address,bytes)'].call(BACTIONS, inputData);
-            poolAddress = '0x' + poolAddress.slice(-40)
+            poolAddress = `0x${poolAddress.slice(-40)}`;
 
             await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
-            
-            let bpool = await BPool.at(poolAddress)
-            let controller = await bpool.getController();
+
+            const bpool = await BPool.at(poolAddress);
+            const controller = await bpool.getController();
 
             assert.equal(controller, USER_PROXY);
-
-
         });
 
-        it('joinPool through proxy', async() => {
-            let createTokens = [DAI, MKR];
-            let createBalances = [toWei('10'), toWei('1')];
-            let createWeights = [toWei('5'), toWei('5')];
-            let swapFee = toWei('0.03')
-            let finalize = true;
+        it('joinPool through proxy', async () => {
+            const createTokens = [DAI, MKR];
+            const createBalances = [toWei('10'), toWei('1')];
+            const createWeights = [toWei('5'), toWei('5')];
+            const swapFee = toWei('0.03');
+            const finalize = true;
 
             let params = [
                 FACTORY,
@@ -115,34 +112,35 @@ contract('BActions', async (accounts) => {
                 swapFee,
                 finalize,
             ];
- 
-            let functionSig = web3.eth.abi.encodeFunctionSignature('create(address,address[],uint256[],uint256[],uint256,bool)')
-            let functionData = web3.eth.abi.encodeParameters(['address','address[]','uint256[]','uint256[]','uint256','bool'], params);
-    
+
+            let functionSig = web3.eth.abi.encodeFunctionSignature(
+                'create(address,address[],uint256[],uint256[],uint256,bool)',
+            );
+            let functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address[]', 'uint256[]', 'uint256[]', 'uint256', 'bool'],
+                params,
+            );
+
             let argumentData = functionData.substring(2);
             let inputData = `${functionSig}${argumentData}`;
 
             let poolAddress = await userProxy.methods['execute(address,bytes)'].call(BACTIONS, inputData);
-            poolAddress = '0x' + poolAddress.slice(-40)
-
-            console.log(poolAddress)
+            poolAddress = `0x${poolAddress.slice(-40)}`;
 
             await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
 
             params = [
                 poolAddress,
                 toWei('100'),
-                [toWei('20'), toWei('2')]
+                [toWei('20'), toWei('2')],
             ];
-            functionSig = web3.eth.abi.encodeFunctionSignature('joinPool(address,uint256,uint256[])')
-            functionData = web3.eth.abi.encodeParameters(['address','uint256','uint256[]'], params);
+            functionSig = web3.eth.abi.encodeFunctionSignature('joinPool(address,uint256,uint256[])');
+            functionData = web3.eth.abi.encodeParameters(['address', 'uint256', 'uint256[]'], params);
 
             argumentData = functionData.substring(2);
             inputData = `${functionSig}${argumentData}`;
 
-            let test = await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
+            await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
         });
-
-
     });
 });
