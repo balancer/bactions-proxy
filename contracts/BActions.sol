@@ -152,7 +152,7 @@ contract BActions {
                 require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
             }
         }
-        pool.transfer(msg.sender, pool.balanceOf(address(this)));
+        require(pool.transfer(msg.sender, pool.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
     }
 
     function joinswapExternAmountIn(
