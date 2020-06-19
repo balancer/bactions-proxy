@@ -15,6 +15,7 @@ pragma solidity 0.5.12;
 
 contract ERC20 {
     function balanceOf(address whom) external view returns (uint);
+    function allowance(address, address) external view returns (uint);
     function approve(address spender, uint amount) external returns (bool);
     function transfer(address dst, uint amt) external returns (bool);
     function transferFrom(address sender, address recipient, uint amount) external returns (bool);
@@ -64,9 +65,12 @@ contract BActions {
         pool = factory.newBPool();
         pool.setSwapFee(swapFee);
 
-        for (uint8 i = 0; i < tokens.length; i++) {
+        for (uint i = 0; i < tokens.length; i++) {
             ERC20 token = ERC20(tokens[i]);
             require(token.transferFrom(msg.sender, address(this), balances[i]), "ERR_TRANSFER_FAILED");
+            if (token.allowance(address(this), address(pool)) > 0) {
+                token.approve(address(pool), 0);
+            }
             token.approve(address(pool), balances[i]);
             pool.bind(tokens[i], balances[i], denorms[i]);
         }
@@ -75,12 +79,11 @@ contract BActions {
             pool.finalize();
             require(pool.transfer(msg.sender, pool.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
         } else {
-            pool.setController(address(this));
             pool.setPublicSwap(true);
         }
     }
 
-    function rebind(
+    function setTokens(
         BPool pool,
         address[] calldata tokens,
         uint[] calldata balances,
@@ -89,7 +92,7 @@ contract BActions {
         require(tokens.length == balances.length, "ERR_LENGTH_MISMATCH");
         require(tokens.length == denorms.length, "ERR_LENGTH_MISMATCH");
 
-        for (uint8 i = 0; i < tokens.length; i++) {
+        for (uint i = 0; i < tokens.length; i++) {
             ERC20 token = ERC20(tokens[i]);
             if (pool.isBound(tokens[i])) {
                 if (balances[i] > pool.getBalance(tokens[i])) {
@@ -97,21 +100,28 @@ contract BActions {
                         token.transferFrom(msg.sender, address(this), balances[i] - pool.getBalance(tokens[i])),
                         "ERR_TRANSFER_FAILED"
                     );
+                    if (token.allowance(address(this), address(pool)) > 0) {
+                        token.approve(address(pool), 0);
+                    }
                     token.approve(address(pool), balances[i] - pool.getBalance(tokens[i]));
                 }
-                if (balances[i] > 0) {
+                if (balances[i] > 10**6) {
                     pool.rebind(tokens[i], balances[i], denorms[i]);
                 } else {
                     pool.unbind(tokens[i]);
                 }
 
-                if (token.balanceOf(address(this)) > 0) {
-                    require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-                }
             } else {
                 require(token.transferFrom(msg.sender, address(this), balances[i]), "ERR_TRANSFER_FAILED");
+                if (token.allowance(address(this), address(pool)) > 0) {
+                    token.approve(address(pool), 0);
+                }
                 token.approve(address(pool), balances[i]);
                 pool.bind(tokens[i], balances[i], denorms[i]);
+            }
+
+            if (token.balanceOf(address(this)) > 0) {
+                require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
             }
 
         }
@@ -140,13 +150,18 @@ contract BActions {
         uint[] calldata maxAmountsIn
     ) external {
         address[] memory tokens = pool.getFinalTokens();
-        for (uint8 i = 0; i < tokens.length; i++) {
+        require(maxAmountsIn.length == tokens.length, "ERR_LENGTH_MISMATCH");
+
+        for (uint i = 0; i < tokens.length; i++) {
             ERC20 token = ERC20(tokens[i]);
             require(token.transferFrom(msg.sender, address(this), maxAmountsIn[i]), "ERR_TRANSFER_FAILED");
+            if (token.allowance(address(this), address(pool)) > 0) {
+                token.approve(address(pool), 0);
+            }
             token.approve(address(pool), maxAmountsIn[i]);
         }
         pool.joinPool(poolAmountOut, maxAmountsIn);
-        for (uint8 i = 0; i < tokens.length; i++) {
+        for (uint i = 0; i < tokens.length; i++) {
             ERC20 token = ERC20(tokens[i]);
             if (token.balanceOf(address(this)) > 0) {
                 require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
@@ -163,6 +178,9 @@ contract BActions {
     ) external {
         ERC20 token = ERC20(tokenIn);
         require(token.transferFrom(msg.sender, address(this), tokenAmountIn), "ERR_TRANSFER_FAILED");
+        if (token.allowance(address(this), address(pool)) > 0) {
+            token.approve(address(pool), 0);
+        }
         token.approve(address(pool), tokenAmountIn);
         uint poolAmountOut = pool.joinswapExternAmountIn(tokenIn, tokenAmountIn, minPoolAmountOut);
         require(pool.transfer(msg.sender, poolAmountOut), "ERR_TRANSFER_FAILED");
