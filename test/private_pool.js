@@ -118,7 +118,7 @@ contract('BActions', async (accounts) => {
             ];
 
             const functionSig = web3.eth.abi.encodeFunctionSignature(
-                'rebind(address,address[],uint256[],uint256[])',
+                'setTokens(address,address[],uint256[],uint256[])',
             );
             const functionData = web3.eth.abi.encodeParameters(
                 ['address', 'address[]', 'uint256[]', 'uint256[]'],
@@ -151,7 +151,7 @@ contract('BActions', async (accounts) => {
             const initUserZrxBalance = await zrx.balanceOf(admin);
 
             const functionSig = web3.eth.abi.encodeFunctionSignature(
-                'rebind(address,address[],uint256[],uint256[])',
+                'setTokens(address,address[],uint256[],uint256[])',
             );
             const functionData = web3.eth.abi.encodeParameters(
                 ['address', 'address[]', 'uint256[]', 'uint256[]'],
@@ -187,7 +187,7 @@ contract('BActions', async (accounts) => {
             ];
 
             const functionSig = web3.eth.abi.encodeFunctionSignature(
-                'rebind(address,address[],uint256[],uint256[])',
+                'setTokens(address,address[],uint256[],uint256[])',
             );
             const functionData = web3.eth.abi.encodeParameters(
                 ['address', 'address[]', 'uint256[]', 'uint256[]'],
@@ -218,7 +218,7 @@ contract('BActions', async (accounts) => {
             ];
 
             const functionSig = web3.eth.abi.encodeFunctionSignature(
-                'rebind(address,address[],uint256[],uint256[])',
+                'setTokens(address,address[],uint256[],uint256[])',
             );
             const functionData = web3.eth.abi.encodeParameters(
                 ['address', 'address[]', 'uint256[]', 'uint256[]'],
@@ -261,7 +261,7 @@ contract('BActions', async (accounts) => {
             const initUserMkrBalance = await mkr.balanceOf(admin);
 
             const functionSig = web3.eth.abi.encodeFunctionSignature(
-                'rebind(address,address[],uint256[],uint256[])',
+                'setTokens(address,address[],uint256[],uint256[])',
             );
             const functionData = web3.eth.abi.encodeParameters(
                 ['address', 'address[]', 'uint256[]', 'uint256[]'],
