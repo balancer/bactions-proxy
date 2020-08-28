@@ -13,6 +13,35 @@
 
 pragma solidity 0.5.12;
 
+pragma experimental ABIEncoderV2;
+
+library Params {
+    struct Pool {
+        address[] tokens;
+        uint[] balances;
+        uint[] weights;
+        uint swapFee;
+    }
+    
+    struct CRP {
+        uint initialSupply;
+        uint minimumWeightChangeBlockPeriod;
+        uint addTokenTimeLockInBlocks;
+    }
+}
+
+library RightsManager {
+    struct Rights {
+        bool canPauseSwapping;
+        bool canChangeSwapFee;
+        bool canChangeWeights;
+        bool canAddRemoveTokens;
+        bool canWhitelistLPs;
+        bool canChangeCap;
+        bool canRemoveAllTokens;
+    }
+}
+
 contract ERC20 {
     function balanceOf(address whom) external view returns (uint);
     function allowance(address, address) external view returns (uint);
@@ -21,25 +50,65 @@ contract ERC20 {
     function transferFrom(address sender, address recipient, uint amount) external returns (bool);
 }
 
-contract BPool is ERC20 {
+contract BalancerOwnable {
+    function setController(address controller) external;
+}
+
+contract AbstractPool is ERC20, BalancerOwnable {
+    function setSwapFee(uint swapFee) external;
+    function setPublicSwap(bool public_) external;
+    
+    function joinPool(uint poolAmountOut, uint[] calldata maxAmountsIn) external;
+    function joinswapExternAmountIn(address tokenIn, uint tokenAmountIn, uint minPoolAmountOut) external returns (uint poolAmountOut);
+}
+
+contract BPool is AbstractPool {
     function isBound(address t) external view returns (bool);
+    function getCurrentTokens() external view returns (address[] memory);
     function getFinalTokens() external view returns(address[] memory);
     function getBalance(address token) external view returns (uint);
-    function setSwapFee(uint swapFee) external;
-    function setController(address controller) external;
-    function setPublicSwap(bool public_) external;
     function finalize() external;
     function bind(address token, uint balance, uint denorm) external;
     function rebind(address token, uint balance, uint denorm) external;
     function unbind(address token) external;
     function joinPool(uint poolAmountOut, uint[] calldata maxAmountsIn) external;
-    function joinswapExternAmountIn(
-        address tokenIn, uint tokenAmountIn, uint minPoolAmountOut
-    ) external returns (uint poolAmountOut);
+    function joinswapExternAmountIn(address tokenIn, uint tokenAmountIn, uint minPoolAmountOut) external returns (uint poolAmountOut);
 }
 
 contract BFactory {
     function newBPool() external returns (BPool);
+}
+
+contract ConfigurableRightsPool is AbstractPool {
+    struct PoolParams {
+        string tokenSymbol;
+        string tokenName;
+        address[] tokens;
+        uint[] startBalances;
+        uint[] startWeights;
+        uint swapFee;
+    }
+
+    function bPool() external view returns (BPool);
+
+    function createPool(uint initialSupply, uint minimumWeightChangeBlockPeriod, uint addTokenTimeLockInBlocks) external;
+    function createPool(uint initialSupply) external;
+    function setCap(uint newCap) external;
+    function updateWeight(address token, uint newWeight) external;
+    function updateWeightsGradually(uint[] calldata newWeights, uint startBlock, uint endBlock) external;
+    function commitAddToken(address token, uint balance, uint denormalizedWeight) external;
+    function applyAddToken() external;
+    function removeToken(address token) external;
+    function whitelistLiquidityProvider(address provider) external;
+    function removeWhitelistedLiquidityProvider(address provider) external;
+}
+
+contract CRPFactory {
+    function newCrp(
+        address factoryAddress,
+        ConfigurableRightsPool.PoolParams calldata params,
+        RightsManager.Rights calldata rights
+    ) external returns (ConfigurableRightsPool);
 }
 
 /********************************** WARNING **********************************/
@@ -51,28 +120,24 @@ contract BFactory {
 
 contract BActions {
 
+    // --- Pool Creation ---
+
     function create(
         BFactory factory,
-        address[] calldata tokens,
-        uint[] calldata balances,
-        uint[] calldata denorms,
-        uint swapFee,
+        Params.Pool calldata params,
         bool finalize
     ) external returns (BPool pool) {
-        require(tokens.length == balances.length, "ERR_LENGTH_MISMATCH");
-        require(tokens.length == denorms.length, "ERR_LENGTH_MISMATCH");
+        require(params.tokens.length == params.balances.length, "ERR_LENGTH_MISMATCH");
+        require(params.tokens.length == params.weights.length, "ERR_LENGTH_MISMATCH");
 
         pool = factory.newBPool();
-        pool.setSwapFee(swapFee);
+        pool.setSwapFee(params.swapFee);
 
-        for (uint i = 0; i < tokens.length; i++) {
-            ERC20 token = ERC20(tokens[i]);
-            require(token.transferFrom(msg.sender, address(this), balances[i]), "ERR_TRANSFER_FAILED");
-            if (token.allowance(address(this), address(pool)) > 0) {
-                token.approve(address(pool), 0);
-            }
-            token.approve(address(pool), balances[i]);
-            pool.bind(tokens[i], balances[i], denorms[i]);
+        for (uint i = 0; i < params.tokens.length; i++) {
+            ERC20 token = ERC20(params.tokens[i]);
+            require(token.transferFrom(msg.sender, address(this), params.balances[i]), "ERR_TRANSFER_FAILED");
+            _safeApprove(token, address(pool), params.balances[i]);
+            pool.bind(params.tokens[i], params.balances[i], params.weights[i]);
         }
 
         if (finalize) {
@@ -82,6 +147,96 @@ contract BActions {
             pool.setPublicSwap(true);
         }
     }
+    
+    function createSmartPool(
+        CRPFactory factory,
+        BFactory bFactory,
+        string calldata symbol,
+        string calldata name,
+        Params.Pool calldata poolParams,
+        Params.CRP calldata crpParams,
+        RightsManager.Rights calldata rights
+    ) external returns (ConfigurableRightsPool crp) {
+        require(poolParams.tokens.length == poolParams.balances.length, "ERR_LENGTH_MISMATCH");
+        require(poolParams.tokens.length == poolParams.weights.length, "ERR_LENGTH_MISMATCH");
+        
+        ConfigurableRightsPool.PoolParams memory params = ConfigurableRightsPool.PoolParams({
+            tokenSymbol: symbol,
+            tokenName: name,
+            tokens: poolParams.tokens,
+            startBalances: poolParams.balances,
+            startWeights: poolParams.weights,
+            swapFee: poolParams.swapFee
+        });
+
+        crp = factory.newCrp(
+            address(bFactory),
+            params,
+            rights
+        );
+        
+        for (uint i = 0; i < poolParams.tokens.length; i++) {
+            ERC20 token = ERC20(poolParams.tokens[i]);
+            require(token.transferFrom(msg.sender, address(this), poolParams.balances[i]), "ERR_TRANSFER_FAILED");
+            _safeApprove(token, address(crp), poolParams.balances[i]);
+        }
+        
+        crp.createPool(
+            crpParams.initialSupply,
+            crpParams.minimumWeightChangeBlockPeriod,
+            crpParams.addTokenTimeLockInBlocks
+        );
+        require(crp.transfer(msg.sender, crpParams.initialSupply), "ERR_TRANSFER_FAILED");
+        // DSProxy instance keeps pool ownership to enable management
+    }
+    
+    // --- Joins ---
+    
+    function joinPool(
+        BPool pool,
+        uint poolAmountOut,
+        uint[] calldata maxAmountsIn
+    ) external {
+        address[] memory tokens = pool.getFinalTokens();
+        _join(pool, tokens, poolAmountOut, maxAmountsIn);
+    }
+    
+    function joinSmartPool(
+        ConfigurableRightsPool pool,
+        uint poolAmountOut,
+        uint[] calldata maxAmountsIn
+    ) external {
+        address[] memory tokens = pool.bPool().getCurrentTokens();
+        _join(pool, tokens, poolAmountOut, maxAmountsIn);
+    }
+
+    function joinswapExternAmountIn(
+        AbstractPool pool,
+        ERC20 token,
+        uint tokenAmountIn,
+        uint minPoolAmountOut
+    ) external {
+        require(token.transferFrom(msg.sender, address(this), tokenAmountIn), "ERR_TRANSFER_FAILED");
+        _safeApprove(token, address(pool), tokenAmountIn);
+        uint poolAmountOut = pool.joinswapExternAmountIn(address(token), tokenAmountIn, minPoolAmountOut);
+        require(pool.transfer(msg.sender, poolAmountOut), "ERR_TRANSFER_FAILED");
+    }
+    
+    // --- Pool management (common) ---
+    
+    function setPublicSwap(AbstractPool pool, bool publicSwap) external {
+        pool.setPublicSwap(publicSwap);
+    }
+
+    function setSwapFee(AbstractPool pool, uint newFee) external {
+        pool.setSwapFee(newFee);
+    }
+
+    function setController(AbstractPool pool, address newController) external {
+        pool.setController(newController);
+    }
+    
+    // --- Private pool management ---
 
     function setTokens(
         BPool pool,
@@ -100,10 +255,7 @@ contract BActions {
                         token.transferFrom(msg.sender, address(this), balances[i] - pool.getBalance(tokens[i])),
                         "ERR_TRANSFER_FAILED"
                     );
-                    if (token.allowance(address(this), address(pool)) > 0) {
-                        token.approve(address(pool), 0);
-                    }
-                    token.approve(address(pool), balances[i] - pool.getBalance(tokens[i]));
+                    _safeApprove(token, address(pool), balances[i] - pool.getBalance(tokens[i]));
                 }
                 if (balances[i] > 10**6) {
                     pool.rebind(tokens[i], balances[i], denorms[i]);
@@ -113,10 +265,7 @@ contract BActions {
 
             } else {
                 require(token.transferFrom(msg.sender, address(this), balances[i]), "ERR_TRANSFER_FAILED");
-                if (token.allowance(address(this), address(pool)) > 0) {
-                    token.approve(address(pool), 0);
-                }
-                token.approve(address(pool), balances[i]);
+                _safeApprove(token, address(pool), balances[i]);
                 pool.bind(tokens[i], balances[i], denorms[i]);
             }
 
@@ -127,29 +276,111 @@ contract BActions {
         }
     }
 
-    function setPublicSwap(BPool pool, bool publicSwap) external {
-        pool.setPublicSwap(publicSwap);
-    }
-
-    function setSwapFee(BPool pool, uint newFee) external {
-        pool.setSwapFee(newFee);
-    }
-
-    function setController(BPool pool, address newController) external {
-        pool.setController(newController);
-    }
-
     function finalize(BPool pool) external {
         pool.finalize();
         require(pool.transfer(msg.sender, pool.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
     }
-
-    function joinPool(
-        BPool pool,
-        uint poolAmountOut,
-        uint[] calldata maxAmountsIn
+    
+    // --- Smart pool management ---
+    
+    function increaseWeight(
+        ConfigurableRightsPool crp,
+        ERC20 token,
+        uint newWeight,
+        uint tokenAmountIn
     ) external {
-        address[] memory tokens = pool.getFinalTokens();
+        require(token.transferFrom(msg.sender, address(this), tokenAmountIn), "ERR_TRANSFER_FAILED");
+        _safeApprove(token, address(crp), tokenAmountIn);
+        crp.updateWeight(address(token), newWeight);
+        require(crp.transfer(msg.sender, crp.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+    }
+    
+    function decreaseWeight(
+        ConfigurableRightsPool crp,
+        ERC20 token,
+        uint newWeight,
+        uint poolAmountIn
+    ) external {
+        require(crp.transferFrom(msg.sender, address(this), poolAmountIn), "ERR_TRANSFER_FAILED");
+        crp.updateWeight(address(token), newWeight);
+        require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+    }
+    
+    function updateWeightsGradually(
+        ConfigurableRightsPool crp,
+        uint[] calldata newWeights,
+        uint startBlock,
+        uint endBlock
+    ) external {
+        crp.updateWeightsGradually(newWeights, startBlock, endBlock);
+    }
+
+    function setCap(
+        ConfigurableRightsPool crp,
+        uint newCap
+    ) external {
+        crp.setCap(newCap);
+    }
+
+    function commitAddToken(
+        ConfigurableRightsPool crp,
+        ERC20 token,
+        uint balance,
+        uint denormalizedWeight
+    ) external {
+        crp.commitAddToken(address(token), balance, denormalizedWeight);
+    }
+
+    function applyAddToken(
+        ConfigurableRightsPool crp,
+        ERC20 token,
+        uint tokenAmountIn
+    ) external {
+        require(token.transferFrom(msg.sender, address(this), tokenAmountIn), "ERR_TRANSFER_FAILED");
+        _safeApprove(token, address(crp), tokenAmountIn);
+        crp.applyAddToken();
+        require(crp.transfer(msg.sender, crp.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+    }
+
+    function removeToken(
+        ConfigurableRightsPool crp,
+        ERC20 token,
+        uint poolAmountIn
+    ) external {
+        require(crp.transferFrom(msg.sender, address(this), poolAmountIn), "ERR_TRANSFER_FAILED");
+        crp.removeToken(address(token));
+        require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+    }
+
+    function whitelistLiquidityProvider(
+        ConfigurableRightsPool crp,
+        address provider
+    ) external {
+        crp.whitelistLiquidityProvider(provider);
+    }
+
+    function removeWhitelistedLiquidityProvider(
+        ConfigurableRightsPool crp,
+        address provider
+    ) external {
+        crp.removeWhitelistedLiquidityProvider(provider);
+    }
+    
+    // --- Internals ---
+    
+    function _safeApprove(ERC20 token, address spender, uint amount) internal {
+        if (token.allowance(address(this), spender) > 0) {
+            token.approve(spender, 0);
+        }
+        token.approve(spender, amount);
+    }
+    
+    function _join(
+        AbstractPool pool,
+        address[] memory tokens,
+        uint poolAmountOut,
+        uint[] memory maxAmountsIn
+    ) internal {
         require(maxAmountsIn.length == tokens.length, "ERR_LENGTH_MISMATCH");
 
         for (uint i = 0; i < tokens.length; i++) {
@@ -168,21 +399,5 @@ contract BActions {
             }
         }
         require(pool.transfer(msg.sender, pool.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-    }
-
-    function joinswapExternAmountIn(
-        BPool pool,
-        address tokenIn,
-        uint tokenAmountIn,
-        uint minPoolAmountOut
-    ) external {
-        ERC20 token = ERC20(tokenIn);
-        require(token.transferFrom(msg.sender, address(this), tokenAmountIn), "ERR_TRANSFER_FAILED");
-        if (token.allowance(address(this), address(pool)) > 0) {
-            token.approve(address(pool), 0);
-        }
-        token.approve(address(pool), tokenAmountIn);
-        uint poolAmountOut = pool.joinswapExternAmountIn(tokenIn, tokenAmountIn, minPoolAmountOut);
-        require(pool.transfer(msg.sender, poolAmountOut), "ERR_TRANSFER_FAILED");
     }
 }
