@@ -13,6 +13,7 @@
         "assert": false,
         "it": false,
         "before": false,
+        "beforeEach": false,
         "describe": false,
         "web3": false
     }
