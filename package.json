@@ -10,7 +10,7 @@
         "test": "truffle test",
         "coverage": "yarn solidity-coverage",
         "lint": "eslint .",
-        "lint:contracts": "solhint contracts/*.sol"
+        "lint:contracts": "solhint contracts/BActions.sol"
     },
     "repository": {
         "type": "git",
@@ -30,7 +30,7 @@
         "eslint-plugin-react": "^7.17.0",
         "ganache-core": "^2.6.1",
         "mocha": "^6.2.0",
-        "solhint": "^2.3.0",
+        "solhint": "^3.2.0",
         "solidity-coverage": "^0.6.7",
         "standard": "^14.0.2",
         "truffle": "5.1.24",

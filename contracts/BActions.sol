@@ -30,11 +30,11 @@ library RightsManager {
 }
 
 abstract contract ERC20 {
-    function balanceOf(address whom) external view virtual returns (uint);
-    function allowance(address, address) external view virtual returns (uint);
     function approve(address spender, uint amount) external virtual returns (bool);
     function transfer(address dst, uint amt) external virtual returns (bool);
     function transferFrom(address sender, address recipient, uint amount) external virtual returns (bool);
+    function balanceOf(address whom) external view virtual returns (uint);
+    function allowance(address, address) external view virtual returns (uint);
 }
 
 abstract contract BalancerOwnable {
@@ -46,18 +46,20 @@ abstract contract AbstractPool is ERC20, BalancerOwnable {
     function setPublicSwap(bool public_) external virtual;
     
     function joinPool(uint poolAmountOut, uint[] calldata maxAmountsIn) external virtual;
-    function joinswapExternAmountIn(address tokenIn, uint tokenAmountIn, uint minPoolAmountOut) external virtual returns (uint poolAmountOut);
+    function joinswapExternAmountIn(
+        address tokenIn, uint tokenAmountIn, uint minPoolAmountOut
+    ) external virtual returns (uint poolAmountOut);
 }
 
 abstract contract BPool is AbstractPool {
-    function isBound(address t) external view virtual returns (bool);
-    function getCurrentTokens() external view virtual returns (address[] memory);
-    function getFinalTokens() external view virtual returns(address[] memory);
-    function getBalance(address token) external view virtual returns (uint);
     function finalize() external virtual;
     function bind(address token, uint balance, uint denorm) external virtual;
     function rebind(address token, uint balance, uint denorm) external virtual;
     function unbind(address token) external virtual;
+    function isBound(address t) external view virtual returns (bool);
+    function getCurrentTokens() external view virtual returns (address[] memory);
+    function getFinalTokens() external view virtual returns(address[] memory);
+    function getBalance(address token) external view virtual returns (uint);
 }
 
 abstract contract BFactory {
@@ -65,9 +67,9 @@ abstract contract BFactory {
 }
 
 abstract contract ConfigurableRightsPool is AbstractPool {
-    function bPool() external view virtual returns (BPool);
-
-    function createPool(uint initialSupply, uint minimumWeightChangeBlockPeriod, uint addTokenTimeLockInBlocks) external virtual;
+    function createPool(
+        uint initialSupply, uint minimumWeightChangeBlockPeriod, uint addTokenTimeLockInBlocks
+    ) external virtual;
     function createPool(uint initialSupply) external virtual;
     function setCap(uint newCap) external virtual;
     function updateWeight(address token, uint newWeight) external virtual;
@@ -77,6 +79,7 @@ abstract contract ConfigurableRightsPool is AbstractPool {
     function removeToken(address token) external virtual;
     function whitelistLiquidityProvider(address provider) external virtual;
     function removeWhitelistedLiquidityProvider(address provider) external virtual;
+    function bPool() external view virtual returns (BPool);
 }
 
 abstract contract CRPFactory {
