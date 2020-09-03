@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.6.6;
+pragma solidity 0.6.12;
 
 // Needed to pass in structs
 pragma experimental ABIEncoderV2;
 
 // Imports
 
+import "./IERC20.sol";
 import "./ConfigurableRightsPool.sol";
-import "./PCToken.sol";
 import "./IBFactory.sol";
+import "./BalancerConstants.sol";
+import "./BalancerSafeMath.sol";
+import "./SafeApprove.sol";
 
 
 /**
@@ -18,7 +21,7 @@ import "./IBFactory.sol";
 library SmartPoolManager {
     // Type declarations
 
-    struct NewToken {
+    struct NewTokenParams {
         address addr;
         bool isCommitted;
         uint commitBlock;
@@ -65,12 +68,7 @@ library SmartPoolManager {
         if (newWeight < currentWeight) {
             // This means the controller will withdraw tokens to keep price
             // So they need to redeem PCTokens
-            // This will raise the weight; check to make sure it doesn't go over the max
             deltaWeight = BalancerSafeMath.bsub(currentWeight, newWeight);
-
-            require(BalancerSafeMath.badd(totalWeight, deltaWeight) <= BalancerConstants.MAX_TOTAL_WEIGHT,
-                    "ERR_MAX_TOTAL_WEIGHT");
-
 
             // poolShares = totalSupply * (deltaWeight / totalWeight)
             poolShares = BalancerSafeMath.bmul(totalSupply,
@@ -125,42 +123,36 @@ library SmartPoolManager {
     /**
      * @notice External function called to make the contract update weights according to plan
      * @param bPool - Core BPool the CRP is wrapping
-     * @param startBlock - when weights should start to change
-     * @param endBlock - when weights will be at their final values
-     * @param startWeights - current token weights
-     * @param newWeights - target token weights
+     * @param gradualUpdate - gradual update parameters from the CRP
     */
     function pokeWeights(
         IBPool bPool,
-        uint startBlock,
-        uint endBlock,
-        uint[] calldata startWeights,
-        uint[] calldata newWeights
+        ConfigurableRightsPool.GradualUpdateParams storage gradualUpdate
     )
         external
     {
         // Do nothing if we call this when there is no update plan
-        if (startBlock == 0) {
+        if (gradualUpdate.startBlock == 0) {
             return;
         }
 
         // Error to call it before the start of the plan
-        require(block.number >= startBlock, "ERR_CANT_POKE_YET");
+        require(block.number >= gradualUpdate.startBlock, "ERR_CANT_POKE_YET");
         // Proposed error message improvement
         // require(block.number >= startBlock, "ERR_NO_HOKEY_POKEY");
 
         // This allows for pokes after endBlock that get weights to endWeights
         // Get the current block (or the endBlock, if we're already past the end)
         uint currentBlock;
-        if (block.number > endBlock) {
-            currentBlock = endBlock;
+        if (block.number > gradualUpdate.endBlock) {
+            currentBlock = gradualUpdate.endBlock;
         }
         else {
             currentBlock = block.number;
         }
 
-        uint blockPeriod = BalancerSafeMath.bsub(endBlock, startBlock);
-        uint blocksElapsed = BalancerSafeMath.bsub(currentBlock, startBlock);
+        uint blockPeriod = BalancerSafeMath.bsub(gradualUpdate.endBlock, gradualUpdate.startBlock);
+        uint blocksElapsed = BalancerSafeMath.bsub(currentBlock, gradualUpdate.startBlock);
         uint weightDelta;
         uint deltaPerBlock;
         uint newWeight;
@@ -173,31 +165,33 @@ library SmartPoolManager {
             // Make sure it does nothing if the new and old weights are the same (saves gas)
             // It's a degenerate case if they're *all* the same, but you certainly could have
             // a plan where you only change some of the weights in the set
-            if (startWeights[i] != newWeights[i]) {
-                if (newWeights[i] < startWeights[i]) {
+            if (gradualUpdate.startWeights[i] != gradualUpdate.endWeights[i]) {
+                if (gradualUpdate.endWeights[i] < gradualUpdate.startWeights[i]) {
                     // We are decreasing the weight
 
                     // First get the total weight delta
-                    weightDelta = BalancerSafeMath.bsub(startWeights[i], newWeights[i]);
+                    weightDelta = BalancerSafeMath.bsub(gradualUpdate.startWeights[i],
+                                                        gradualUpdate.endWeights[i]);
                     // And the amount it should change per block = total change/number of blocks in the period
                     deltaPerBlock = BalancerSafeMath.bdiv(weightDelta, blockPeriod);
                     //deltaPerBlock = bdivx(weightDelta, blockPeriod);
 
                      // newWeight = startWeight - (blocksElapsed * deltaPerBlock)
-                    newWeight = BalancerSafeMath.bsub(startWeights[i],
+                    newWeight = BalancerSafeMath.bsub(gradualUpdate.startWeights[i],
                                                       BalancerSafeMath.bmul(blocksElapsed, deltaPerBlock));
                 }
                 else {
                     // We are increasing the weight
 
                     // First get the total weight delta
-                    weightDelta = BalancerSafeMath.bsub(newWeights[i], startWeights[i]);
+                    weightDelta = BalancerSafeMath.bsub(gradualUpdate.endWeights[i],
+                                                        gradualUpdate.startWeights[i]);
                     // And the amount it should change per block = total change/number of blocks in the period
                     deltaPerBlock = BalancerSafeMath.bdiv(weightDelta, blockPeriod);
                     //deltaPerBlock = bdivx(weightDelta, blockPeriod);
 
                      // newWeight = startWeight + (blocksElapsed * deltaPerBlock)
-                    newWeight = BalancerSafeMath.badd(startWeights[i],
+                    newWeight = BalancerSafeMath.badd(gradualUpdate.startWeights[i],
                                                       BalancerSafeMath.bmul(blocksElapsed, deltaPerBlock));
                 }
 
@@ -206,6 +200,11 @@ library SmartPoolManager {
                 bPool.rebind(tokens[i], bal, newWeight);
             }
         }
+
+        // Reset to allow add/remove tokens, or manual weight updates
+        if (block.number >= gradualUpdate.endBlock) {
+            gradualUpdate.startBlock = 0;
+        }
     }
 
     /* solhint-enable function-max-lines */
@@ -213,20 +212,18 @@ library SmartPoolManager {
     /**
      * @notice Schedule (commit) a token to be added; must call applyAddToken after a fixed
      *         number of blocks to actually add the token
-     * @dev Not sure about the naming here. Kind of reversed; I would think you would "Apply" to add
-     *      a token, then "Commit" it to actually do the binding.
      * @param bPool - Core BPool the CRP is wrapping
      * @param token - the token to be added
      * @param balance - how much to be added
      * @param denormalizedWeight - the desired token weight
-     * @param newToken - NewToken struct used to hold the token data (in CRP storage)
+     * @param newToken - NewTokenParams struct used to hold the token data (in CRP storage)
      */
     function commitAddToken(
         IBPool bPool,
         address token,
         uint balance,
         uint denormalizedWeight,
-        NewToken storage newToken
+        NewTokenParams storage newToken
     )
         external
     {
@@ -237,6 +234,7 @@ library SmartPoolManager {
         require(BalancerSafeMath.badd(bPool.getTotalDenormalizedWeight(),
                                       denormalizedWeight) <= BalancerConstants.MAX_TOTAL_WEIGHT,
                 "ERR_MAX_TOTAL_WEIGHT");
+        require(balance >= BalancerConstants.MIN_BALANCE, "ERR_BALANCE_BELOW_MIN");
 
         newToken.addr = token;
         newToken.balance = balance;
@@ -250,13 +248,13 @@ library SmartPoolManager {
      * @param self - ConfigurableRightsPool instance calling the library
      * @param bPool - Core BPool the CRP is wrapping
      * @param addTokenTimeLockInBlocks -  Wait time between committing and applying a new token
-     * @param newToken - NewToken struct used to hold the token data (in CRP storage)
+     * @param newToken - NewTokenParams struct used to hold the token data (in CRP storage)
      */
     function applyAddToken(
         ConfigurableRightsPool self,
         IBPool bPool,
         uint addTokenTimeLockInBlocks,
-        NewToken storage newToken
+        NewTokenParams storage newToken
     )
         external
     {
@@ -274,14 +272,13 @@ library SmartPoolManager {
         newToken.isCommitted = false;
 
         // First gets the tokens from msg.sender to this contract (Pool Controller)
-        // bool xfer = IERC20(newToken.addr).transferFrom(msg.sender, address(this), newToken.balance);
         bool returnValue = IERC20(newToken.addr).transferFrom(self.getController(), address(self), newToken.balance);
         require(returnValue, "ERR_ERC20_FALSE");
 
         // Now with the tokens this contract can bind them to the pool it controls
         // Approves bPool to pull from this controller
         // Approve unlimited, same as when creating the pool, so they can join pools later
-        returnValue = IERC20(newToken.addr).approve(address(bPool), uint(-1));
+        returnValue = SafeApprove.safeApprove(IERC20(newToken.addr), address(bPool), BalancerConstants.MAX_UINT);
         require(returnValue, "ERR_ERC20_FALSE");
 
         bPool.bind(newToken.addr, newToken.balance, newToken.denorm);
@@ -292,6 +289,11 @@ library SmartPoolManager {
 
      /**
      * @notice Remove a token from the pool
+     * @dev Logic in the CRP controls when ths can be called. There are two related permissions:
+     *      AddRemoveTokens - which allows removing down to the underlying BPool limit of two
+     *      RemoveAllTokens - which allows completely draining the pool by removing all tokens
+     *                        This can result in a non-viable pool with 0 or 1 tokens (by design),
+     *                        meaning all swapping or binding operations would fail in this state
      * @param self - ConfigurableRightsPool instance calling the library
      * @param bPool - Core BPool the CRP is wrapping
      * @param token - token to remove
@@ -326,10 +328,29 @@ library SmartPoolManager {
     }
 
     /**
+     * @notice Non ERC20-conforming tokens are problematic; don't allow them in pools
+     * @dev Will revert if invalid
+     * @param token - The prospective token to verify
+     */
+    function verifyTokenCompliance(address token) external {
+        verifyTokenComplianceInternal(token);
+    }
+
+    /**
+     * @notice Non ERC20-conforming tokens are problematic; don't allow them in pools
+     * @dev Will revert if invalid - overloaded to save space in the main contract
+     * @param tokens - The prospective tokens to verify
+     */
+    function verifyTokenCompliance(address[] calldata tokens) external {
+        for (uint i = 0; i < tokens.length; i++) {
+            verifyTokenComplianceInternal(tokens[i]);
+         }
+    }
+
+    /**
      * @notice Update weights in a predetermined way, between startBlock and endBlock,
      *         through external cals to pokeWeights
      * @param bPool - Core BPool the CRP is wrapping
-     * @param newToken - NewToken instance we're using to store the new token data (in CRP storage)
      * @param newWeights - final weights we want to get to
      * @param startBlock - when weights should start to change
      * @param endBlock - when weights will be at their final values
@@ -337,19 +358,14 @@ library SmartPoolManager {
     */
     function updateWeightsGradually(
         IBPool bPool,
-        NewToken storage newToken,
+        ConfigurableRightsPool.GradualUpdateParams storage gradualUpdate,
         uint[] calldata newWeights,
         uint startBlock,
         uint endBlock,
         uint minimumWeightChangeBlockPeriod
     )
         external
-        view
-        returns (uint actualStartBlock, uint[] memory startWeights)
     {
-        // Don't start this when we're in the middle of adding a new token
-        require(!newToken.isCommitted, "ERR_PENDING_TOKEN_ADD");
-
         // Enforce a minimum time over which to make the changes
         // The also prevents endBlock <= startBlock
         require(BalancerSafeMath.bsub(endBlock, startBlock) >= minimumWeightChangeBlockPeriod,
@@ -358,8 +374,11 @@ library SmartPoolManager {
 
         address[] memory tokens = bPool.getCurrentTokens();
 
+        // Must specify weights for all tokens
+        require(newWeights.length == tokens.length, "ERR_START_WEIGHTS_MISMATCH");
+
         uint weightsSum = 0;
-        startWeights = new uint[](tokens.length);
+        gradualUpdate.startWeights = new uint[](tokens.length);
 
         // Check that endWeights are valid now to avoid reverting in a future pokeWeights call
         //
@@ -370,7 +389,7 @@ library SmartPoolManager {
             require(newWeights[i] >= BalancerConstants.MIN_WEIGHT, "ERR_WEIGHT_BELOW_MIN");
 
             weightsSum = BalancerSafeMath.badd(weightsSum, newWeights[i]);
-            startWeights[i] = bPool.getDenormalizedWeight(tokens[i]);
+            gradualUpdate.startWeights[i] = bPool.getDenormalizedWeight(tokens[i]);
         }
         require(weightsSum <= BalancerConstants.MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
 
@@ -381,11 +400,14 @@ library SmartPoolManager {
             // Only valid within the startBlock - endBlock period!
             // Should not happen, but defensively check that we aren't
             // setting the start point past the end point
-            actualStartBlock = block.number;
+            gradualUpdate.startBlock = block.number;
         }
         else{
-            actualStartBlock = startBlock;
+            gradualUpdate.startBlock = startBlock;
         }
+
+        gradualUpdate.endBlock = endBlock;
+        gradualUpdate.endWeights = newWeights;
     }
 
     /**
@@ -411,8 +433,9 @@ library SmartPoolManager {
         require(maxAmountsIn.length == tokens.length, "ERR_AMOUNTS_MISMATCH");
 
         uint poolTotal = self.totalSupply();
-        // Add 1 to ensure any rounding errors favor the pool
-        uint ratio = BalancerSafeMath.bdiv(poolAmountOut, poolTotal + 1);
+        // Subtract  1 to ensure any rounding errors favor the pool
+        uint ratio = BalancerSafeMath.bdiv(poolAmountOut,
+                                           BalancerSafeMath.bsub(poolTotal, 1));
 
         require(ratio != 0, "ERR_MATH_APPROX");
 
@@ -426,7 +449,8 @@ library SmartPoolManager {
             address t = tokens[i];
             uint bal = bPool.getBalance(t);
             // Add 1 to ensure any rounding errors favor the pool
-            uint tokenAmountIn = BalancerSafeMath.bmul(ratio, bal + 1);
+            uint tokenAmountIn = BalancerSafeMath.bmul(ratio,
+                                                       BalancerSafeMath.badd(bal, 1));
 
             require(tokenAmountIn != 0, "ERR_MATH_APPROX");
             require(tokenAmountIn <= maxAmountsIn[i], "ERR_LIMIT_IN");
@@ -465,8 +489,8 @@ library SmartPoolManager {
         exitFee = BalancerSafeMath.bmul(poolAmountIn, BalancerConstants.EXIT_FEE);
         pAiAfterExitFee = BalancerSafeMath.bsub(poolAmountIn, exitFee);
 
-        // Subtract 1 to ensure any rounding errors favor the pool
-        uint ratio = BalancerSafeMath.bdiv(pAiAfterExitFee, poolTotal - 1);
+        uint ratio = BalancerSafeMath.bdiv(pAiAfterExitFee,
+                                           BalancerSafeMath.badd(poolTotal, 1));
 
         require(ratio != 0, "ERR_MATH_APPROX");
 
@@ -478,7 +502,8 @@ library SmartPoolManager {
             address t = tokens[i];
             uint bal = bPool.getBalance(t);
             // Subtract 1 to ensure any rounding errors favor the pool
-            uint tokenAmountOut = BalancerSafeMath.bmul(ratio, bal - 1);
+            uint tokenAmountOut = BalancerSafeMath.bmul(ratio,
+                                                        BalancerSafeMath.bsub(bal, 1));
 
             require(tokenAmountOut != 0, "ERR_MATH_APPROX");
             require(tokenAmountOut >= minAmountsOut[i], "ERR_LIMIT_OUT");
@@ -645,5 +670,13 @@ library SmartPoolManager {
         require(poolAmountIn <= maxPoolAmountIn, "ERR_LIMIT_IN");
 
         exitFee = BalancerSafeMath.bmul(poolAmountIn, BalancerConstants.EXIT_FEE);
+    }
+
+    // Internal functions
+
+    // Check for zero transfer, and make sure it returns true to returnValue
+    function verifyTokenComplianceInternal(address token) internal {
+        bool returnValue = IERC20(token).transfer(msg.sender, 0);
+        require(returnValue, "ERR_NONCONFORMING_TOKEN");
     }
 }

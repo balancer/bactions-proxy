@@ -96,6 +96,7 @@ contract('BActions', async (accounts) => {
             await weth.approve(USER_PROXY, MAX, { from: user });
 
             const symbol = 'TEST';
+            const name = 'Test Pool';
             const poolParams = {
                 tokens: [DAI, MKR, WETH],
                 balances: [toWei('400'), toWei('1'), toWei('4')],
@@ -123,6 +124,7 @@ contract('BActions', async (accounts) => {
                 CRP_FACTORY,
                 FACTORY,
                 symbol,
+                name,
                 poolParams,
                 crpParams,
                 rights,
@@ -407,7 +409,7 @@ contract('BActions', async (accounts) => {
         it('allows changing cap', async () => {
             const crp = await ConfigurableRightsPool.at(POOL);
 
-            const initialCap = await crp.getCap.call();
+            const initialCap = await crp.bspCap();
             assert.equal(initialCap, toWei('200'));
 
             const setCapInterface = BActions.abi
@@ -421,7 +423,7 @@ contract('BActions', async (accounts) => {
                 .encodeFunctionCall(setCapInterface, params);
             await creatorProxy.methods['execute(address,bytes)'](BACTIONS, functionCall);
 
-            const cap = await crp.getCap.call();
+            const cap = await crp.bspCap();
             assert.equal(cap, toWei('500'));
         });
 

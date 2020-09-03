@@ -67,6 +67,15 @@ abstract contract BFactory {
 }
 
 abstract contract ConfigurableRightsPool is AbstractPool {
+    struct PoolParams {
+        string poolTokenSymbol;
+        string poolTokenName;
+        address[] constituentTokens;
+        uint[] tokenBalances;
+        uint[] tokenWeights;
+        uint swapFee;
+    }
+
     function createPool(
         uint initialSupply, uint minimumWeightChangeBlockPeriod, uint addTokenTimeLockInBlocks
     ) external virtual;
@@ -85,11 +94,7 @@ abstract contract ConfigurableRightsPool is AbstractPool {
 abstract contract CRPFactory {
     function newCrp(
         address factoryAddress,
-        string calldata symbol,
-        address[] calldata tokens,
-        uint[] calldata startBalances,
-        uint[] calldata startWeights,
-        uint swapFee,
+        ConfigurableRightsPool.PoolParams calldata params,
         RightsManager.Rights calldata rights
     ) external virtual returns (ConfigurableRightsPool);
 }
@@ -135,6 +140,7 @@ contract BActions {
         CRPFactory factory,
         BFactory bFactory,
         string calldata symbol,
+        string calldata name,
         Params.Pool calldata poolParams,
         Params.CRP calldata crpParams,
         RightsManager.Rights calldata rights
@@ -142,13 +148,18 @@ contract BActions {
         require(poolParams.tokens.length == poolParams.balances.length, "ERR_LENGTH_MISMATCH");
         require(poolParams.tokens.length == poolParams.weights.length, "ERR_LENGTH_MISMATCH");
 
+        ConfigurableRightsPool.PoolParams memory params = ConfigurableRightsPool.PoolParams({
+            poolTokenSymbol: symbol,
+            poolTokenName: name,
+            constituentTokens: poolParams.tokens,
+            tokenBalances: poolParams.balances,
+            tokenWeights: poolParams.weights,
+            swapFee: poolParams.swapFee
+        });
+
         crp = factory.newCrp(
             address(bFactory),
-            symbol,
-            poolParams.tokens,
-            poolParams.balances,
-            poolParams.weights,
-            poolParams.swapFee,
+            params,
             rights
         );
         

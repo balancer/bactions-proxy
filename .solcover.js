@@ -6,4 +6,4 @@ module.exports = {
       'test'
     ],
     testrpcOptions: "-p 8555 -d"
-  };
+};
