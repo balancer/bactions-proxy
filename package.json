@@ -8,7 +8,7 @@
         "compile": "truffle compile",
         "testrpc": "ganache-cli --deterministic --gasLimit 12000000 --defaultBalanceEther 500",
         "test": "truffle test",
-        "coverage": "yarn solidity-coverage",
+        "coverage": "truffle run coverage",
         "lint": "eslint .",
         "lint:contracts": "solhint contracts/BActions.sol"
     },
@@ -31,7 +31,7 @@
         "ganache-core": "^2.6.1",
         "mocha": "^6.2.0",
         "solhint": "^3.2.0",
-        "solidity-coverage": "^0.6.7",
+        "solidity-coverage": "^0.7.10",
         "standard": "^14.0.2",
         "truffle": "5.1.24",
         "truffle-assertions": "^0.9.1",
