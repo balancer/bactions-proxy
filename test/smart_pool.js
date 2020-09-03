@@ -81,12 +81,12 @@ contract('BActions', async (accounts) => {
             await mkr.approve(USER_PROXY, MAX, { from: user });
             await weth.approve(USER_PROXY, MAX, { from: user });
 
-            const symbol = 'TEST';
-            const name = 'Test Pool';
             const poolParams = {
-                tokens: [DAI, MKR, WETH],
-                balances: [toWei('400'), toWei('1'), toWei('4')],
-                weights: [toWei('10'), toWei('10'), toWei('20')],
+                poolTokenSymbol: 'TEST',
+                poolTokenName: 'Test Pool',
+                constituentTokens: [DAI, MKR, WETH],
+                tokenBalances: [toWei('400'), toWei('1'), toWei('4')],
+                tokenWeights: [toWei('10'), toWei('10'), toWei('20')],
                 swapFee: toWei('0.0015'),
             };
             const crpParams = {
@@ -109,8 +109,6 @@ contract('BActions', async (accounts) => {
             const params = [
                 CRP_FACTORY,
                 FACTORY,
-                symbol,
-                name,
                 poolParams,
                 crpParams,
                 rights,

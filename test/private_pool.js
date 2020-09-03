@@ -81,12 +81,10 @@ contract('BActions', async (accounts) => {
 
             const params = [
                 FACTORY,
-                {
-                    tokens: createTokens,
-                    balances: createBalances,
-                    weights: createWeights,
-                    swapFee,
-                },
+                createTokens,
+                createBalances,
+                createWeights,
+                swapFee,
                 finalize,
             ];
 

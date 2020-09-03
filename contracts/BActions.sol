@@ -3,21 +3,6 @@ pragma solidity 0.6.12;
 
 pragma experimental ABIEncoderV2;
 
-library Params {
-    struct Pool {
-        address[] tokens;
-        uint[] balances;
-        uint[] weights;
-        uint swapFee;
-    }
-    
-    struct CRP {
-        uint initialSupply;
-        uint minimumWeightChangeBlockPeriod;
-        uint addTokenTimeLockInBlocks;
-    }
-}
-
 library RightsManager {
     struct Rights {
         bool canPauseSwapping;
@@ -76,13 +61,21 @@ abstract contract ConfigurableRightsPool is AbstractPool {
         uint swapFee;
     }
 
+    struct CrpParams {
+        uint initialSupply;
+        uint minimumWeightChangeBlockPeriod;
+        uint addTokenTimeLockInBlocks;
+    }
+
     function createPool(
         uint initialSupply, uint minimumWeightChangeBlockPeriod, uint addTokenTimeLockInBlocks
     ) external virtual;
     function createPool(uint initialSupply) external virtual;
     function setCap(uint newCap) external virtual;
     function updateWeight(address token, uint newWeight) external virtual;
-    function updateWeightsGradually(uint[] calldata newWeights, uint startBlock, uint endBlock) external virtual;
+    function updateWeightsGradually(
+        uint[] calldata newWeights, uint startBlock, uint endBlock
+    ) external virtual;
     function commitAddToken(address token, uint balance, uint denormalizedWeight) external virtual;
     function applyAddToken() external virtual;
     function removeToken(address token) external virtual;
@@ -112,20 +105,23 @@ contract BActions {
 
     function create(
         BFactory factory,
-        Params.Pool calldata params,
+        address[] calldata tokens,
+        uint[] calldata balances,
+        uint[] calldata weights,
+        uint swapFee,
         bool finalize
     ) external returns (BPool pool) {
-        require(params.tokens.length == params.balances.length, "ERR_LENGTH_MISMATCH");
-        require(params.tokens.length == params.weights.length, "ERR_LENGTH_MISMATCH");
+        require(tokens.length == balances.length, "ERR_LENGTH_MISMATCH");
+        require(tokens.length == weights.length, "ERR_LENGTH_MISMATCH");
 
         pool = factory.newBPool();
-        pool.setSwapFee(params.swapFee);
+        pool.setSwapFee(swapFee);
 
-        for (uint i = 0; i < params.tokens.length; i++) {
-            ERC20 token = ERC20(params.tokens[i]);
-            require(token.transferFrom(msg.sender, address(this), params.balances[i]), "ERR_TRANSFER_FAILED");
-            _safeApprove(token, address(pool), params.balances[i]);
-            pool.bind(params.tokens[i], params.balances[i], params.weights[i]);
+        for (uint i = 0; i < tokens.length; i++) {
+            ERC20 token = ERC20(tokens[i]);
+            require(token.transferFrom(msg.sender, address(this), balances[i]), "ERR_TRANSFER_FAILED");
+            _safeApprove(token, address(pool), balances[i]);
+            pool.bind(tokens[i], balances[i], weights[i]);
         }
 
         if (finalize) {
@@ -139,34 +135,32 @@ contract BActions {
     function createSmartPool(
         CRPFactory factory,
         BFactory bFactory,
-        string calldata symbol,
-        string calldata name,
-        Params.Pool calldata poolParams,
-        Params.CRP calldata crpParams,
+        ConfigurableRightsPool.PoolParams calldata poolParams,
+        ConfigurableRightsPool.CrpParams calldata crpParams,
         RightsManager.Rights calldata rights
     ) external returns (ConfigurableRightsPool crp) {
-        require(poolParams.tokens.length == poolParams.balances.length, "ERR_LENGTH_MISMATCH");
-        require(poolParams.tokens.length == poolParams.weights.length, "ERR_LENGTH_MISMATCH");
-
-        ConfigurableRightsPool.PoolParams memory params = ConfigurableRightsPool.PoolParams({
-            poolTokenSymbol: symbol,
-            poolTokenName: name,
-            constituentTokens: poolParams.tokens,
-            tokenBalances: poolParams.balances,
-            tokenWeights: poolParams.weights,
-            swapFee: poolParams.swapFee
-        });
+        require(
+            poolParams.constituentTokens.length == poolParams.tokenBalances.length,
+            "ERR_LENGTH_MISMATCH"
+        );
+        require(
+            poolParams.constituentTokens.length == poolParams.tokenWeights.length,
+            "ERR_LENGTH_MISMATCH"
+        );
 
         crp = factory.newCrp(
             address(bFactory),
-            params,
+            poolParams,
             rights
         );
         
-        for (uint i = 0; i < poolParams.tokens.length; i++) {
-            ERC20 token = ERC20(poolParams.tokens[i]);
-            require(token.transferFrom(msg.sender, address(this), poolParams.balances[i]), "ERR_TRANSFER_FAILED");
-            _safeApprove(token, address(crp), poolParams.balances[i]);
+        for (uint i = 0; i < poolParams.constituentTokens.length; i++) {
+            ERC20 token = ERC20(poolParams.constituentTokens[i]);
+            require(
+                token.transferFrom(msg.sender, address(this), poolParams.tokenBalances[i]),
+                "ERR_TRANSFER_FAILED"
+            );
+            _safeApprove(token, address(crp), poolParams.tokenBalances[i]);
         }
         
         crp.createPool(

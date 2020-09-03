@@ -69,12 +69,10 @@ contract('BActions', async (accounts) => {
             const createInterface = BActions.abi.find((iface) => iface.name === 'create');
             const params = [
                 FACTORY,
-                {
-                    tokens: createTokens,
-                    balances: createBalances,
-                    weights: createWeights,
-                    swapFee,
-                },
+                createTokens,
+                createBalances,
+                createWeights,
+                swapFee,
                 finalize,
             ];
 
@@ -103,12 +101,10 @@ contract('BActions', async (accounts) => {
             const createInterface = BActions.abi.find((iface) => iface.name === 'create');
             let params = [
                 FACTORY,
-                {
-                    tokens: createTokens,
-                    balances: createBalances,
-                    weights: createWeights,
-                    swapFee,
-                },
+                createTokens,
+                createBalances,
+                createWeights,
+                swapFee,
                 finalize,
             ];
 
