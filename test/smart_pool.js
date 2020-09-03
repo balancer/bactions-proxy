@@ -154,6 +154,16 @@ contract('BActions', async (accounts) => {
             assert.isFalse(isFinalized);
         });
 
+        it('has correct symbol and name', async () => {
+            const crp = await ConfigurableRightsPool.at(POOL);
+
+            const poolSymbol = await crp.symbol();
+            const poolName = await crp.name();
+
+            assert.equal(poolSymbol, 'TEST');
+            assert.equal(poolName, 'Test Pool');
+        });
+
         it('has correct tokens', async () => {
             const bpool = await BPool.at(UNDERLYING_POOL);
             const tokens = await bpool.getCurrentTokens.call();
