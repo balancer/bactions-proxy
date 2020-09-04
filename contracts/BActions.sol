@@ -368,10 +368,7 @@ contract BActions {
         for (uint i = 0; i < tokens.length; i++) {
             ERC20 token = ERC20(tokens[i]);
             require(token.transferFrom(msg.sender, address(this), maxAmountsIn[i]), "ERR_TRANSFER_FAILED");
-            if (token.allowance(address(this), address(pool)) > 0) {
-                token.approve(address(pool), 0);
-            }
-            token.approve(address(pool), maxAmountsIn[i]);
+            _safeApprove(token, address(pool), maxAmountsIn[i]);
         }
         pool.joinPool(poolAmountOut, maxAmountsIn);
         for (uint i = 0; i < tokens.length; i++) {
