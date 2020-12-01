@@ -77,6 +77,8 @@ contract('BActions', async (accounts) => {
             const swapFee = toWei('0.03');
             const finalize = false;
 
+            const createInterface = BActions.abi.find((iface) => iface.name === 'create');
+
             const params = [
                 FACTORY,
                 createTokens,
@@ -86,23 +88,14 @@ contract('BActions', async (accounts) => {
                 finalize,
             ];
 
-            const functionSig = web3.eth.abi.encodeFunctionSignature(
-                'create(address,address[],uint256[],uint256[],uint256,bool)',
-            );
-            const functionData = web3.eth.abi.encodeParameters(
-                ['address', 'address[]', 'uint256[]', 'uint256[]', 'uint256', 'bool'],
-                params,
-            );
-
-            const argumentData = functionData.substring(2);
-            const inputData = `${functionSig}${argumentData}`;
+            const functionCall = web3.eth.abi.encodeFunctionCall(createInterface, params);
 
             const poolAddress = await userProxy.methods['execute(address,bytes)'].call(
-                BACTIONS, inputData,
+                BACTIONS, functionCall,
             );
             POOL = `0x${poolAddress.slice(-40)}`;
 
-            await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
+            await userProxy.methods['execute(address,bytes)'](BACTIONS, functionCall);
         });
 
         it('rebind add new token', async () => {

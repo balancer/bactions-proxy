@@ -34,7 +34,7 @@ module.exports = {
             host: 'localhost', // Localhost (default: none)
             port: 8545, // Standard Ethereum port (default: none)
             network_id: '*', // Any network (default: none)
-            gas: 10000000,
+            gas: 12000000,
         },
         kovan: {
             host: 'localhost',
@@ -54,15 +54,17 @@ module.exports = {
     // Configure your compilers
     compilers: {
         solc: {
-            version: '0.5.12',
+            version: '0.6.12',
             // docker: true,        // Use "0.5.1" you've installed locally with docker (default: false)
             settings: { // See the solidity docs for advice about optimization and evmVersion
                 optimizer: {
                     enabled: true,
                     runs: 200,
                 },
-                evmVersion: 'byzantium',
+                evmVersion: 'istanbul',
             },
         },
     },
+
+    plugins: ['solidity-coverage'],
 };
