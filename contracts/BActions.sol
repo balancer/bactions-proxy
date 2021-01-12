@@ -34,6 +34,7 @@ abstract contract AbstractPool is ERC20, BalancerOwnable {
     function joinswapExternAmountIn(
         address tokenIn, uint tokenAmountIn, uint minPoolAmountOut
     ) external virtual returns (uint poolAmountOut);
+    function exitPool(uint poolAmountIn, uint[] calldata minAmountsOut) external virtual;
 }
 
 abstract contract BPool is AbstractPool {
