@@ -354,6 +354,36 @@ contract BActions {
     ) external {
         crp.removeWhitelistedLiquidityProvider(provider);
     }
+
+    // --- Migration ---
+
+    function migrate(
+        Vault vault,
+        BPool poolIn,
+        uint poolInAmount,
+        uint[] calldata minAmountsOut,
+        BalancerPool poolOut,
+        uint poolOutAmount,
+        uint128[] calldata maxAmountsIn
+    ) external {
+        address[] memory tokens = poolIn.getFinalTokens();
+        // Transfer v1 BPTs to proxy
+        poolIn.transferFrom(msg.sender, address(this), poolInAmount);
+        // Exit v1 pool
+        poolIn.exitPool(poolInAmount, minAmountsOut);
+        // Approve each token to v2 vault
+        for (uint i = 0; i < tokens.length; i++) {
+            ERC20 token = ERC20(tokens[i]);
+            _safeApprove(token, address(vault), uint(-1));
+        }
+        // Join v2 pool and transfer v2 BPTs to user
+        poolOut.joinPool(poolOutAmount, maxAmountsIn, true, msg.sender);
+        // Send dust back
+        for (uint i = 0; i < tokens.length; i++) {
+            ERC20 token = ERC20(tokens[i]);
+            require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+        }
+    }
     
     // --- Internals ---
     
