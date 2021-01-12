@@ -35,7 +35,7 @@
     },
     "dependencies": {
         "decimal.js": "^10.2.0",
-        "ganache-cli": "^6.7.0",
+        "ganache-cli": "^6.12.1",
         "global": "^4.4.0"
     }
 }
