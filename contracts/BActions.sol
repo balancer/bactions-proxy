@@ -48,6 +48,12 @@ abstract contract BPool is AbstractPool {
     function getBalance(address token) external view virtual returns (uint);
 }
 
+abstract contract BalancerPool is ERC20 {
+    function joinPool(uint256 poolAmountOut, uint128[] calldata maxAmountsIn, bool transferTokens, address beneficiary) external virtual;
+}
+
+abstract contract Vault {}
+
 abstract contract BFactory {
     function newBPool() external virtual returns (BPool);
 }
