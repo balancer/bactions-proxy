@@ -5,7 +5,7 @@ const BalancerSafeMath = artifacts.require('BalancerSafeMath');
 const BActions = artifacts.require('BActions');
 const BFactory = artifacts.require('BFactory');
 
-module.exports = async function(deployer, network, accounts) {
+module.exports = async function(deployer, network) {
     if (network == 'development' || network == 'soliditycoverage') {
         await deployer.deploy(RightsManager);
         await deployer.deploy(SmartPoolManager);
