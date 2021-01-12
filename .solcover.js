@@ -1,9 +1,10 @@
 module.exports = {
     port: 8555,
     skipFiles: [
-      'Migrations.sol',
-      'DSProxyFactory.sol',
-      'test'
+      'test',
+      'common',
+      'v1',
+      'v2',
     ],
     testrpcOptions: "-p 8555 -d"
 };

@@ -6,12 +6,12 @@ pragma experimental ABIEncoderV2;
 
 // Imports
 
-import "./IERC20.sol";
+import "../common/IERC20.sol";
+import "../common/SafeApprove.sol";
 import "./ConfigurableRightsPool.sol";
 import "./IBFactory.sol";
 import "./BalancerConstants.sol";
 import "./BalancerSafeMath.sol";
-import "./SafeApprove.sol";
 
 
 /**
