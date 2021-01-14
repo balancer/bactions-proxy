@@ -50,6 +50,9 @@ abstract contract BPool is AbstractPool {
 
 abstract contract BalancerPool is ERC20 {
     function joinPool(uint256 poolAmountOut, uint256[] calldata maxAmountsIn, bool transferTokens, address beneficiary) external virtual;
+    function joinPoolExactTokensInForBPTOut(
+        uint256 minBPTAmountOut, uint256[] calldata amountsIn, bool transferTokens, address beneficiary
+    ) external virtual returns (uint256 bptAmountOut);
 }
 
 abstract contract Vault {}
@@ -363,8 +366,7 @@ contract BActions {
         uint poolInAmount,
         uint[] calldata minAmountsOut,
         BalancerPool poolOut,
-        uint poolOutAmount,
-        uint256[] calldata maxAmountsIn
+        uint256 minAmountOut
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
         // Transfer v1 BPTs to proxy
@@ -377,12 +379,12 @@ contract BActions {
             _safeApprove(token, address(vault), uint(-1));
         }
         // Join v2 pool and transfer v2 BPTs to user
-        poolOut.joinPool(poolOutAmount, maxAmountsIn, true, msg.sender);
-        // Send dust back
-        for (uint i = 0; i < tokens.length; i++) {
+        uint256[] memory amountsIn = new uint256[](tokens.length);
+        for (uint256 i = 0; i < tokens.length; ++i) {
             ERC20 token = ERC20(tokens[i]);
-            require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+            amountsIn[i] = token.balanceOf(address(this));
         }
+        poolOut.joinPoolExactTokensInForBPTOut(minAmountOut, amountsIn, true, msg.sender);
     }
     
     // --- Internals ---
