@@ -49,7 +49,7 @@ abstract contract BPool is AbstractPool {
 }
 
 abstract contract BalancerPool is ERC20 {
-    function joinPool(uint256 poolAmountOut, uint128[] calldata maxAmountsIn, bool transferTokens, address beneficiary) external virtual;
+    function joinPool(uint256 poolAmountOut, uint256[] calldata maxAmountsIn, bool transferTokens, address beneficiary) external virtual;
 }
 
 abstract contract Vault {}
@@ -364,7 +364,7 @@ contract BActions {
         uint[] calldata minAmountsOut,
         BalancerPool poolOut,
         uint poolOutAmount,
-        uint128[] calldata maxAmountsIn
+        uint256[] calldata maxAmountsIn
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
         // Transfer v1 BPTs to proxy

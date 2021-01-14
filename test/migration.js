@@ -147,10 +147,10 @@ contract('BActions', async (accounts) => {
             const startV2Balance = await v2Pool.balanceOf(admin); // should go 100 -> 300
 
             const functionSig = web3.eth.abi.encodeFunctionSignature(
-                'migrate(address,address,uint256,uint256[],address,uint256,uint128[])',
+                'migrate(address,address,uint256,uint256[],address,uint256,uint256[])',
             );
             const functionData = web3.eth.abi.encodeParameters(
-                ['address', 'address', 'uint256', 'uint256[]', 'address', 'uint256', 'uint128[]'],
+                ['address', 'address', 'uint256', 'uint256[]', 'address', 'uint256', 'uint256[]'],
                 params,
             );
 

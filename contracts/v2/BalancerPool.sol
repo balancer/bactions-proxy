@@ -14,7 +14,7 @@ contract BalancerPool {
     function init(
         Vault vault,
         bytes32 poolId,
-        uint128[] calldata amounts
+        uint256[] calldata amounts
     ) external {
         _vault = vault;
         _poolId = poolId;
@@ -35,23 +35,23 @@ contract BalancerPool {
 
     function joinPool(
         uint256 poolAmountOut,
-        uint128[] calldata maxAmountsIn,
+        uint256[] calldata maxAmountsIn,
         bool transferTokens,
         address beneficiary
     ) external {
         IERC20[] memory tokens = _vault.getPoolTokens(_poolId);
 
-        uint128[] memory balances = _vault.getPoolTokenBalances(_poolId, tokens);
+        uint256[] memory balances = _vault.getPoolTokenBalances(_poolId, tokens);
 
         uint256 poolTotal = totalSupply();
-        uint128 ratio = uint128(poolAmountOut / poolTotal);
+        uint256 ratio = uint256(poolAmountOut / poolTotal);
         require(ratio != 0, "ERR_MATH_APPROX");
 
         require(maxAmountsIn.length == tokens.length, "Tokens and amounts length mismatch");
 
-        uint128[] memory amountsIn = new uint128[](tokens.length);
+        uint256[] memory amountsIn = new uint256[](tokens.length);
         for (uint256 i = 0; i < tokens.length; i++) {
-            amountsIn[i] = uint128(balances[i] * ratio);
+            amountsIn[i] = uint256(balances[i] * ratio);
             require(amountsIn[i] <= maxAmountsIn[i], "ERR_LIMIT_IN");
         }
 

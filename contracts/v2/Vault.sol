@@ -7,7 +7,7 @@ import '../common/IERC20.sol';
 contract Vault {
     uint256 _poolCount;
     mapping(bytes32 => IERC20[]) internal _poolTokens;
-    mapping(bytes32 => mapping(IERC20 => uint128)) internal _poolTokenBalance;
+    mapping(bytes32 => mapping(IERC20 => uint256)) internal _poolTokenBalance;
 
     function newPool(IERC20[] memory tokens) external returns (bytes32) {
         bytes32 poolId = bytes32(_poolCount);
@@ -23,9 +23,9 @@ contract Vault {
     function getPoolTokenBalances(bytes32 poolId, IERC20[] calldata tokens)
         external
         view
-        returns (uint128[] memory)
+        returns (uint256[] memory)
     {
-        uint128[] memory balances = new uint128[](tokens.length);
+        uint256[] memory balances = new uint256[](tokens.length);
         for (uint256 i = 0; i < tokens.length; ++i) {
             balances[i] = _poolTokenBalance[poolId][tokens[i]];
         }
@@ -37,15 +37,15 @@ contract Vault {
         bytes32 poolId,
         address from,
         IERC20[] calldata tokens,
-        uint128[] calldata amounts,
+        uint256[] calldata amounts,
         bool withdrawFromUserBalance
     ) external {
         require(tokens.length == amounts.length, "Tokens and total amounts length mismatch");
 
         for (uint256 i = 0; i < tokens.length; ++i) {
             if (amounts[i] > 0) {
-                uint128 toReceive = amounts[i];
-                uint128 received = _pullTokens(tokens[i], from, toReceive);
+                uint256 toReceive = amounts[i];
+                uint256 received = _pullTokens(tokens[i], from, toReceive);
                 require(received == toReceive, "Not enough tokens received");
                 _increasePoolCash(poolId, tokens[i], amounts[i]);
             }
@@ -55,23 +55,23 @@ contract Vault {
     function _pullTokens(
         IERC20 token,
         address from,
-        uint128 amount
-    ) internal returns (uint128) {
+        uint256 amount
+    ) internal returns (uint256) {
         if (amount == 0) {
             return 0;
         }
         uint256 currentBalance = token.balanceOf(address(this));
         token.transferFrom(from, address(this), amount);
         uint256 newBalance = token.balanceOf(address(this));
-        return uint128(newBalance - currentBalance);
+        return newBalance - currentBalance;
     }
 
     function _increasePoolCash(
         bytes32 poolId,
         IERC20 token,
-        uint128 amount
+        uint256 amount
     ) internal {
-        uint128 currentBalance = _poolTokenBalance[poolId][token];
+        uint256 currentBalance = _poolTokenBalance[poolId][token];
         _poolTokenBalance[poolId][token] = currentBalance + amount;
     }
 }
