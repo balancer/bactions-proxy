@@ -48,6 +48,10 @@ contract BalancerPool {
         return _balance[owner];
     }
 
+    function getPoolId() external view returns (bytes32) {
+        return _poolId;
+    }
+
     function joinPool(
         uint256 poolAmountOut,
         uint256[] calldata maxAmountsIn,
