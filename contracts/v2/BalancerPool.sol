@@ -22,7 +22,7 @@ contract BalancerPool {
         Vault vault,
         bytes32 poolId,
         uint256 swapFee,
-        uint256[] calldata amounts,
+        uint128[] calldata amounts,
         uint256[] calldata weights
     ) external {
         _vault = vault;
@@ -68,9 +68,9 @@ contract BalancerPool {
 
         require(maxAmountsIn.length == tokens.length, "Tokens and amounts length mismatch");
 
-        uint256[] memory amountsIn = new uint256[](tokens.length);
+        uint128[] memory amountsIn = new uint128[](tokens.length);
         for (uint256 i = 0; i < tokens.length; i++) {
-            amountsIn[i] = uint256(balances[i] * ratio);
+            amountsIn[i] = uint128(balances[i] * ratio);
             require(amountsIn[i] <= maxAmountsIn[i], "ERR_LIMIT_IN");
         }
 
@@ -81,7 +81,7 @@ contract BalancerPool {
 
     function joinPoolExactTokensInForBPTOut(
         uint256 minBPTAmountOut,
-        uint256[] calldata amountsIn,
+        uint128[] calldata amountsIn,
         bool transferTokens,
         address beneficiary
     ) external returns (uint256 bptAmountOut) {
@@ -105,7 +105,7 @@ contract BalancerPool {
     function _exactTokensInForBPTOut(
         uint256[] memory balances,
         uint256[] memory normalizedWeights,
-        uint256[] memory amountsIn,
+        uint128[] memory amountsIn,
         uint256 bptTotalSupply,
         uint256 swapFee
     ) internal pure returns (uint256) {

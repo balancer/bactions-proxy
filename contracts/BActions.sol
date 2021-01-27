@@ -51,7 +51,7 @@ abstract contract BPool is AbstractPool {
 abstract contract BalancerPool is ERC20 {
     function joinPool(uint256 poolAmountOut, uint256[] calldata maxAmountsIn, bool transferTokens, address beneficiary) external virtual;
     function joinPoolExactTokensInForBPTOut(
-        uint256 minBPTAmountOut, uint256[] calldata amountsIn, bool transferTokens, address beneficiary
+        uint256 minBPTAmountOut, uint128[] calldata amountsIn, bool transferTokens, address beneficiary
     ) external virtual returns (uint256 bptAmountOut);
     function getPoolId() external view virtual returns (bytes32);
 }
@@ -383,10 +383,10 @@ contract BActions {
             _safeApprove(token, address(vault), uint(-1));
         }
         // Join v2 pool and transfer v2 BPTs to user
-        uint256[] memory amountsIn = new uint256[](outTokens.length);
-        for (uint256 i = 0; i < outTokens.length; ++i) {
+        uint128[] memory amountsIn = new uint128[](outTokens.length);
+        for (uint128 i = 0; i < outTokens.length; ++i) {
             ERC20 token = ERC20(outTokens[i]);
-            amountsIn[i] = token.balanceOf(address(this));
+            amountsIn[i] = uint128(token.balanceOf(address(this)));
         }
         poolOut.joinPoolExactTokensInForBPTOut(minAmountOut, amountsIn, true, msg.sender);
     }

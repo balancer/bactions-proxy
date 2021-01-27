@@ -37,14 +37,14 @@ contract Vault {
         bytes32 poolId,
         address from,
         IERC20[] calldata tokens,
-        uint256[] calldata amounts,
+        uint128[] calldata amounts,
         bool withdrawFromUserBalance
     ) external {
         require(tokens.length == amounts.length, "Tokens and total amounts length mismatch");
 
         for (uint256 i = 0; i < tokens.length; ++i) {
             if (amounts[i] > 0) {
-                uint256 toReceive = amounts[i];
+                uint256 toReceive = uint256(amounts[i]);
                 uint256 received = _pullTokens(tokens[i], from, toReceive);
                 require(received == toReceive, "Not enough tokens received");
                 _increasePoolCash(poolId, tokens[i], amounts[i]);
@@ -69,7 +69,7 @@ contract Vault {
     function _increasePoolCash(
         bytes32 poolId,
         IERC20 token,
-        uint256 amount
+        uint128 amount
     ) internal {
         uint256 currentBalance = _poolTokenBalance[poolId][token];
         _poolTokenBalance[poolId][token] = currentBalance + amount;
