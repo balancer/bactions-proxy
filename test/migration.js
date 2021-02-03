@@ -137,7 +137,7 @@ contract('BActions', async (accounts) => {
             vault.joinPool(id, admin, tokens, balances, false, initJoinData);
         }
 
-        it('Simple migration', async () => {
+        it('Proportional migration', async () => {
             // Approve v1 BPT to proxy
             const bpt = await BPool.at(POOL_V1);
             await bpt.approve(USER_PROXY, MAX);
@@ -156,7 +156,45 @@ contract('BActions', async (accounts) => {
             // const startV2Balance = await v2Pool.balanceOf(admin); // should go 100 -> 300
 
             const functionSig = web3.eth.abi.encodeFunctionSignature(
-                'migrate(address,address,uint256,uint256[],address,uint256)',
+                'migrateProportionally(address,address,uint256,uint256[],address,uint256)',
+            );
+            const functionData = web3.eth.abi.encodeParameters(
+                ['address', 'address', 'uint256', 'uint256[]', 'address', 'uint256'],
+                params,
+            );
+
+            const argumentData = functionData.substring(2);
+            const inputData = `${functionSig}${argumentData}`;
+
+            await userProxy.methods['execute(address,bytes)'](BACTIONS, inputData);
+
+            const endV1Balance = await bpt.balanceOf(admin);
+            // const endV2Balance = await v2Pool.balanceOf(admin);
+
+            assert.equal(fromWei(startV1Balance.sub(endV1Balance)), '10');
+            // assert.equal(fromWei(endV2Balance.sub(startV2Balance)), '200');
+        });
+
+        it('Full migration', async () => {
+            // Approve v1 BPT to proxy
+            const bpt = await BPool.at(POOL_V1);
+            await bpt.approve(USER_PROXY, MAX);
+
+            const params = [
+                VAULT,
+                POOL_V1,
+                toWei('10'),
+                [0, 0, 0],
+                POOL_V2,
+                0,
+            ];
+
+            const startV1Balance = await bpt.balanceOf(admin); // should go 100 -> 0
+            // const v2Pool = await BalancerPool.at(POOL_V2);
+            // const startV2Balance = await v2Pool.balanceOf(admin); // should go 100 -> 300
+
+            const functionSig = web3.eth.abi.encodeFunctionSignature(
+                'migrateAll(address,address,uint256,uint256[],address,uint256)',
             );
             const functionData = web3.eth.abi.encodeParameters(
                 ['address', 'address', 'uint256', 'uint256[]', 'address', 'uint256'],

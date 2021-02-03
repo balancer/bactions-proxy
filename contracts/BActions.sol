@@ -371,7 +371,60 @@ contract BActions {
 
     // --- Migration ---
 
-    function migrate(
+    function migrateProportionally(
+        Vault vault,
+        BPool poolIn,
+        uint poolInAmount,
+        uint[] calldata  tokenOutAmountsMin,
+        BalancerPool poolOut,
+        uint poolOutAmountMin
+    ) external {
+        address[] memory tokens = poolIn.getFinalTokens();
+        address[] memory outTokens = vault.getPoolTokens(poolOut.getPoolId());
+        // Transfer v1 BPTs to proxy
+        poolIn.transferFrom(msg.sender, address(this), poolInAmount);
+        // Exit v1 pool
+        poolIn.exitPool(poolInAmount,  tokenOutAmountsMin);
+        // Approve each token to v2 vault
+        for (uint i = 0; i < tokens.length; i++) {
+            _safeApprove(ERC20(tokens[i]), address(vault), uint(-1));
+        }
+        // Calculate amounts for even join
+        // 1) find the lowest UserBalance-to-PoolBalance ratio
+        // 2) multiply by this ratio to get in amounts
+        uint lowestRatio = uint(-1);
+        uint[] memory tokenInAmounts = vault.getPoolTokenBalances(poolOut.getPoolId(), outTokens);
+        for (uint i = 0; i < outTokens.length; ++i) {
+            uint ratio = 1 ether * ERC20(outTokens[i]).balanceOf(address(this)) / tokenInAmounts[i];
+            if (ratio < lowestRatio) {
+                lowestRatio = ratio;
+            }
+        }
+        for (uint i = 0; i < outTokens.length; ++i) {
+            tokenInAmounts[i] = tokenInAmounts[i] * lowestRatio / 1 ether;
+        }
+        // Join v2 pool and transfer v2 BPTs to user
+        vault.joinPool(
+            poolOut.getPoolId(),
+            msg.sender,
+            tokens,
+            tokenInAmounts,
+            false,
+            abi.encode(
+                BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
+                poolOutAmountMin
+            )
+        );
+        // Send dust back
+        for (uint i = 0; i < tokens.length; i++) {
+            ERC20 token = ERC20(tokens[i]);
+            if (token.balanceOf(address(this)) > 0) {
+                require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+            }
+        }
+    }
+
+    function migrateAll(
         Vault vault,
         BPool poolIn,
         uint poolInAmount,
