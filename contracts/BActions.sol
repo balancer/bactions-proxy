@@ -407,7 +407,7 @@ contract BActions {
         vault.joinPool(
             poolOut.getPoolId(),
             msg.sender,
-            tokens,
+            outTokens,
             tokenInAmounts,
             false,
             abi.encode(
@@ -415,7 +415,7 @@ contract BActions {
                 poolOutAmountMin
             )
         );
-        // Send dust back
+        // Send "change" back
         for (uint i = 0; i < tokens.length; i++) {
             ERC20 token = ERC20(tokens[i]);
             if (token.balanceOf(address(this)) > 0) {
