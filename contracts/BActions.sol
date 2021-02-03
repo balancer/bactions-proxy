@@ -392,14 +392,14 @@ contract BActions {
     }
     
     // --- Internals ---
-    
+
     function _safeApprove(ERC20 token, address spender, uint amount) internal {
         if (token.allowance(address(this), spender) > 0) {
             token.approve(spender, 0);
         }
         token.approve(spender, amount);
     }
-    
+
     function _join(
         AbstractPool pool,
         address[] memory tokens,
