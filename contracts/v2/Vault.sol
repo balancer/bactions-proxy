@@ -2,16 +2,19 @@
 pragma solidity 0.6.12;
 
 import '../common/IERC20.sol';
+import './BalancerPool.sol';
 
 // Vault mock; does not represent the actual Vault design
 contract Vault {
     uint256 _poolCount;
+    mapping(bytes32 => address) internal _poolAddresses;
     mapping(bytes32 => IERC20[]) internal _poolTokens;
     mapping(bytes32 => mapping(IERC20 => uint256)) internal _poolTokenBalance;
 
-    function newPool(IERC20[] memory tokens) external returns (bytes32) {
+    function newPool(IERC20[] memory tokens, address poolAddress) external returns (bytes32) {
         bytes32 poolId = bytes32(_poolCount);
         _poolTokens[poolId] = tokens;
+        _poolAddresses[poolId] = poolAddress;
         _poolCount = _poolCount + 1;
         return poolId;
     }
@@ -20,8 +23,8 @@ contract Vault {
         return _poolTokens[poolId];
     }
 
-    function getPoolTokenBalances(bytes32 poolId, IERC20[] calldata tokens)
-        external
+    function getPoolTokenBalances(bytes32 poolId, IERC20[] memory tokens)
+        public
         view
         returns (uint256[] memory)
     {
@@ -33,21 +36,32 @@ contract Vault {
         return balances;
     }
 
-    function addLiquidity(
+    function joinPool(
         bytes32 poolId,
-        address from,
-        IERC20[] calldata tokens,
-        uint128[] calldata amounts,
-        bool withdrawFromUserBalance
+        address recipient,
+        IERC20[] memory tokens,
+        uint256[] memory maxAmountsIn,
+        bool fromInternalBalance,
+        bytes memory userData
     ) external {
-        require(tokens.length == amounts.length, "Tokens and total amounts length mismatch");
+        require(tokens.length == maxAmountsIn.length, "ERR_TOKENS_AMOUNTS_LENGTH_MISMATCH");
+
+        uint256[] memory currentBalances = getPoolTokenBalances(poolId, tokens);
+
+        address pool = _poolAddresses[poolId];
+        (uint256[] memory amountsIn,) = BalancerPool(pool).onJoinPool(
+            poolId,
+            msg.sender,
+            recipient,
+            currentBalances,
+            maxAmountsIn,
+            0,
+            userData
+        );
 
         for (uint256 i = 0; i < tokens.length; ++i) {
-            if (amounts[i] > 0) {
-                uint256 toReceive = uint256(amounts[i]);
-                uint256 received = _pullTokens(tokens[i], from, toReceive);
-                require(received == toReceive, "Not enough tokens received");
-                _increasePoolCash(poolId, tokens[i], amounts[i]);
+            if (amountsIn[i] > 0) {
+                _increasePoolCash(poolId, tokens[i], amountsIn[i]);
             }
         }
     }
@@ -69,7 +83,7 @@ contract Vault {
     function _increasePoolCash(
         bytes32 poolId,
         IERC20 token,
-        uint128 amount
+        uint256 amount
     ) internal {
         uint256 currentBalance = _poolTokenBalance[poolId][token];
         _poolTokenBalance[poolId][token] = currentBalance + amount;

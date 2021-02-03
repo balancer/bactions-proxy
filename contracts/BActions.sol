@@ -48,20 +48,28 @@ abstract contract BPool is AbstractPool {
     function getBalance(address token) external view virtual returns (uint);
 }
 
+abstract contract BFactory {
+    function newBPool() external virtual returns (BPool);
+}
+
 abstract contract BalancerPool is ERC20 {
-    function joinPool(uint256 poolAmountOut, uint256[] calldata maxAmountsIn, bool transferTokens, address beneficiary) external virtual;
-    function joinPoolExactTokensInForBPTOut(
-        uint256 minBPTAmountOut, uint128[] calldata amountsIn, bool transferTokens, address beneficiary
-    ) external virtual returns (uint256 bptAmountOut);
     function getPoolId() external view virtual returns (bytes32);
+
+    enum JoinKind { INIT, EXACT_TOKENS_IN_FOR_BPT_OUT }
 }
 
 abstract contract Vault {
-    function getPoolTokens(bytes32 poolId) external virtual returns (address[] memory);
-}
-
-abstract contract BFactory {
-    function newBPool() external virtual returns (BPool);
+    function joinPool(
+        bytes32 poolId,
+        address recipient,
+        address[] memory tokens,
+        uint[] memory maxAmountsIn,
+        bool fromInternalBalance,
+        bytes memory userData
+    ) external virtual;
+    function getPoolTokens(bytes32 poolId) external view virtual returns (address[] memory);
+    function getPoolTokenBalances(bytes32 poolId, address[] memory tokens)
+        external view virtual returns (uint[] memory);
 }
 
 abstract contract ConfigurableRightsPool is AbstractPool {
@@ -367,28 +375,36 @@ contract BActions {
         Vault vault,
         BPool poolIn,
         uint poolInAmount,
-        uint[] calldata minAmountsOut,
+        uint[] calldata tokenOutAmountsMin,
         BalancerPool poolOut,
-        uint256 minAmountOut
+        uint poolOutAmountMin
     ) external {
-        address[] memory inTokens = poolIn.getFinalTokens();
+        address[] memory tokens = poolIn.getFinalTokens();
         address[] memory outTokens = vault.getPoolTokens(poolOut.getPoolId());
         // Transfer v1 BPTs to proxy
         poolIn.transferFrom(msg.sender, address(this), poolInAmount);
         // Exit v1 pool
-        poolIn.exitPool(poolInAmount, minAmountsOut);
+        poolIn.exitPool(poolInAmount, tokenOutAmountsMin);
         // Approve each token to v2 vault
-        for (uint i = 0; i < inTokens.length; i++) {
-            ERC20 token = ERC20(inTokens[i]);
-            _safeApprove(token, address(vault), uint(-1));
+        for (uint i = 0; i < tokens.length; i++) {
+            _safeApprove(ERC20(tokens[i]), address(vault), uint(-1));
         }
         // Join v2 pool and transfer v2 BPTs to user
-        uint128[] memory amountsIn = new uint128[](outTokens.length);
-        for (uint128 i = 0; i < outTokens.length; ++i) {
-            ERC20 token = ERC20(outTokens[i]);
-            amountsIn[i] = uint128(token.balanceOf(address(this)));
+        uint[] memory tokenInAmounts = new uint[](outTokens.length);
+        for (uint i = 0; i < outTokens.length; ++i) {
+            tokenInAmounts[i] = ERC20(outTokens[i]).balanceOf(address(this));
         }
-        poolOut.joinPoolExactTokensInForBPTOut(minAmountOut, amountsIn, true, msg.sender);
+        vault.joinPool(
+            poolOut.getPoolId(),
+            msg.sender,
+            outTokens,
+            tokenInAmounts,
+            false,
+            abi.encode(
+                BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
+                poolOutAmountMin
+            )
+        );
     }
     
     // --- Internals ---

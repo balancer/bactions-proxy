@@ -113,22 +113,28 @@ contract('BActions', async (accounts) => {
         }
 
         async function setupV2() {
-            const vault = await Vault.deployed();
-            VAULT = vault.address;
-            vault.newPool([DAI, MKR, WETH]);
-
             const balancerPool = await BalancerPool.deployed();
             POOL_V2 = balancerPool.address;
-            // Approve each token to v2 vault
+
+            const vault = await Vault.deployed();
+            VAULT = vault.address;
+
             await dai.approve(VAULT, MAX);
             await mkr.approve(VAULT, MAX);
             await zrx.approve(VAULT, MAX);
             await weth.approve(VAULT, MAX);
 
+            const id = '0x0';
+            const name = 'Balancer Pool';
+            const symbol = 'BPT';
+            const tokens = [DAI, MKR, WETH];
             const balances = [toWei('200'), toWei('0.5'), toWei('1')];
             const weights = [toWei('5'), toWei('5'), toWei('5')];
             const swapFee = toWei('0.03');
-            balancerPool.init(VAULT, '0x0', swapFee, balances, weights);
+            const initJoinData = '0x0000000000000000000000000000000000000000000000000000000000000000';
+            vault.newPool(tokens, POOL_V2);
+            balancerPool.create(VAULT, id, name, symbol, tokens, weights, swapFee);
+            vault.joinPool(id, admin, tokens, balances, false, initJoinData);
         }
 
         it('Simple migration', async () => {
@@ -139,7 +145,7 @@ contract('BActions', async (accounts) => {
             const params = [
                 VAULT,
                 POOL_V1,
-                toWei('100'),
+                toWei('10'),
                 [0, 0, 0],
                 POOL_V2,
                 0,
@@ -165,7 +171,7 @@ contract('BActions', async (accounts) => {
             const endV1Balance = await bpt.balanceOf(admin);
             // const endV2Balance = await v2Pool.balanceOf(admin);
 
-            assert.equal(fromWei(startV1Balance.sub(endV1Balance)), '100');
+            assert.equal(fromWei(startV1Balance.sub(endV1Balance)), '10');
             // assert.equal(fromWei(endV2Balance.sub(startV2Balance)), '200');
         });
     });
