@@ -67,9 +67,7 @@ abstract contract Vault {
         bool fromInternalBalance,
         bytes memory userData
     ) external virtual;
-    function getPoolTokens(bytes32 poolId) external view virtual returns (address[] memory);
-    function getPoolTokenBalances(bytes32 poolId, address[] memory tokens)
-        external view virtual returns (uint[] memory);
+    function getPoolTokens(bytes32 poolId) external view virtual returns (address[] memory, uint[] memory);
 }
 
 abstract contract ConfigurableRightsPool is AbstractPool {
@@ -380,7 +378,8 @@ contract BActions {
         uint poolOutAmountMin
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
-        address[] memory outTokens = vault.getPoolTokens(poolOut.getPoolId());
+        (address[] memory outTokens, uint[] memory tokenInAmounts) =
+            vault.getPoolTokens(poolOut.getPoolId());
         // Transfer v1 BPTs to proxy
         poolIn.transferFrom(msg.sender, address(this), poolInAmount);
         // Exit v1 pool
@@ -393,7 +392,6 @@ contract BActions {
         // 1) find the lowest UserBalance-to-PoolBalance ratio
         // 2) multiply by this ratio to get in amounts
         uint lowestRatio = uint(-1);
-        uint[] memory tokenInAmounts = vault.getPoolTokenBalances(poolOut.getPoolId(), outTokens);
         for (uint i = 0; i < outTokens.length; ++i) {
             uint ratio = 1 ether * ERC20(outTokens[i]).balanceOf(address(this)) / tokenInAmounts[i];
             if (ratio < lowestRatio) {
@@ -433,7 +431,7 @@ contract BActions {
         uint poolOutAmountMin
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
-        address[] memory outTokens = vault.getPoolTokens(poolOut.getPoolId());
+        (address[] memory outTokens,) = vault.getPoolTokens(poolOut.getPoolId());
         // Transfer v1 BPTs to proxy
         poolIn.transferFrom(msg.sender, address(this), poolInAmount);
         // Exit v1 pool
