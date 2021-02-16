@@ -410,6 +410,7 @@ contract BActions {
             false,
             abi.encode(
                 BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
+                tokenInAmounts,
                 poolOutAmountMin
             )
         );
@@ -453,6 +454,7 @@ contract BActions {
             false,
             abi.encode(
                 BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
+                tokenInAmounts,
                 poolOutAmountMin
             )
         );
