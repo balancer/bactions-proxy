@@ -38,6 +38,7 @@ contract Vault {
 
     function joinPool(
         bytes32 poolId,
+        address sender,
         address recipient,
         IERC20[] memory tokens,
         uint256[] memory maxAmountsIn,
@@ -51,7 +52,7 @@ contract Vault {
         address pool = _poolAddresses[poolId];
         (uint256[] memory amountsIn,) = BalancerPool(pool).onJoinPool(
             poolId,
-            msg.sender,
+            sender,
             recipient,
             currentBalances,
             maxAmountsIn,

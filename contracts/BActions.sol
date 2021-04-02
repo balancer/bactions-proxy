@@ -61,8 +61,9 @@ abstract contract BalancerPool is ERC20 {
 abstract contract Vault {
     function joinPool(
         bytes32 poolId,
+        address sender,
         address recipient,
-        address[] memory tokens,
+        address[] memory assets,
         uint[] memory maxAmountsIn,
         bool fromInternalBalance,
         bytes memory userData
@@ -404,6 +405,7 @@ contract BActions {
         // Join v2 pool and transfer v2 BPTs to user
         vault.joinPool(
             poolOut.getPoolId(),
+            address(this),
             msg.sender,
             outTokens,
             tokenInAmounts,
@@ -448,6 +450,7 @@ contract BActions {
         }
         vault.joinPool(
             poolOut.getPoolId(),
+            address(this),
             msg.sender,
             outTokens,
             tokenInAmounts,
