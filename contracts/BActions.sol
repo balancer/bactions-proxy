@@ -59,16 +59,20 @@ abstract contract BalancerPool is ERC20 {
 }
 
 abstract contract Vault {
+    struct JoinPoolRequest {
+        address[] assets;
+        uint256[] maxAmountsIn;
+        bytes userData;
+        bool fromInternalBalance;
+    }
+
     function joinPool(
         bytes32 poolId,
         address sender,
         address recipient,
-        address[] memory assets,
-        uint[] memory maxAmountsIn,
-        bool fromInternalBalance,
-        bytes memory userData
+        JoinPoolRequest calldata request
     ) external virtual;
-    function getPoolTokens(bytes32 poolId) external view virtual returns (address[] memory, uint[] memory);
+    function getPoolTokens(bytes32 poolId) external view virtual returns (address[] memory, uint[] memory, uint256);
 }
 
 abstract contract ConfigurableRightsPool is AbstractPool {
@@ -379,7 +383,7 @@ contract BActions {
         uint poolOutAmountMin
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
-        (address[] memory outTokens, uint[] memory tokenInAmounts) =
+        (address[] memory outTokens, uint[] memory tokenInAmounts, uint256 maxBlockNumber) =
             vault.getPoolTokens(poolOut.getPoolId());
         // Transfer v1 BPTs to proxy
         poolIn.transferFrom(msg.sender, address(this), poolInAmount);
@@ -403,18 +407,17 @@ contract BActions {
             tokenInAmounts[i] = tokenInAmounts[i] * lowestRatio / 1 ether;
         }
         // Join v2 pool and transfer v2 BPTs to user
+        bytes memory userData = abi.encode(
+            BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
+            tokenInAmounts,
+            poolOutAmountMin
+        );
+        Vault.JoinPoolRequest memory request = Vault.JoinPoolRequest(outTokens, tokenInAmounts, userData, false);
         vault.joinPool(
             poolOut.getPoolId(),
             address(this),
             msg.sender,
-            outTokens,
-            tokenInAmounts,
-            false,
-            abi.encode(
-                BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
-                tokenInAmounts,
-                poolOutAmountMin
-            )
+            request
         );
         // Send "change" back
         for (uint i = 0; i < tokens.length; i++) {
@@ -434,7 +437,7 @@ contract BActions {
         uint poolOutAmountMin
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
-        (address[] memory outTokens,) = vault.getPoolTokens(poolOut.getPoolId());
+        (address[] memory outTokens,,) = vault.getPoolTokens(poolOut.getPoolId());
         // Transfer v1 BPTs to proxy
         poolIn.transferFrom(msg.sender, address(this), poolInAmount);
         // Exit v1 pool
@@ -448,18 +451,18 @@ contract BActions {
         for (uint i = 0; i < outTokens.length; ++i) {
             tokenInAmounts[i] = ERC20(outTokens[i]).balanceOf(address(this));
         }
+
+        bytes memory userData = abi.encode(
+            BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
+            tokenInAmounts,
+            poolOutAmountMin
+        );
+        Vault.JoinPoolRequest memory request = Vault.JoinPoolRequest(outTokens, tokenInAmounts, userData, false);
         vault.joinPool(
             poolOut.getPoolId(),
             address(this),
             msg.sender,
-            outTokens,
-            tokenInAmounts,
-            false,
-            abi.encode(
-                BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
-                tokenInAmounts,
-                poolOutAmountMin
-            )
+            request
         );
         // Send missing tokens back
         for (uint i = 0; i < tokens.length; i++) {

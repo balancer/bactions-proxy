@@ -1,11 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.6.12;
 
+pragma experimental ABIEncoderV2;
+
 import '../common/IERC20.sol';
 import './BalancerPool.sol';
 
 // Vault mock; does not represent the actual Vault design
 contract Vault {
+    struct JoinPoolRequest {
+        IERC20[] assets;
+        uint256[] maxAmountsIn;
+        bytes userData;
+        bool fromInternalBalance;
+    }
+
     uint256 _poolCount;
     mapping(bytes32 => address) internal _poolAddresses;
     mapping(bytes32 => IERC20[]) internal _poolTokens;
@@ -40,14 +49,11 @@ contract Vault {
         bytes32 poolId,
         address sender,
         address recipient,
-        IERC20[] memory tokens,
-        uint256[] memory maxAmountsIn,
-        bool fromInternalBalance,
-        bytes memory userData
+        JoinPoolRequest memory request
     ) external {
-        require(tokens.length == maxAmountsIn.length, "ERR_TOKENS_AMOUNTS_LENGTH_MISMATCH");
+        require(request.assets.length == request.maxAmountsIn.length, "ERR_TOKENS_AMOUNTS_LENGTH_MISMATCH");
 
-        uint256[] memory currentBalances = getPoolTokenBalances(poolId, tokens);
+        uint256[] memory currentBalances = getPoolTokenBalances(poolId, request.assets);
 
         address pool = _poolAddresses[poolId];
         (uint256[] memory amountsIn,) = BalancerPool(pool).onJoinPool(
@@ -55,14 +61,14 @@ contract Vault {
             sender,
             recipient,
             currentBalances,
-            maxAmountsIn,
+            request.maxAmountsIn,
             0,
-            userData
+            request.userData
         );
 
-        for (uint256 i = 0; i < tokens.length; ++i) {
+        for (uint256 i = 0; i < request.assets.length; ++i) {
             if (amountsIn[i] > 0) {
-                _increasePoolCash(poolId, tokens[i], amountsIn[i]);
+                _increasePoolCash(poolId, request.assets[i], amountsIn[i]);
             }
         }
     }
