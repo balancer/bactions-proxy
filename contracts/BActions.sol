@@ -383,7 +383,7 @@ contract BActions {
         uint poolOutAmountMin
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
-        (address[] memory outTokens, uint[] memory tokenInAmounts, uint256 maxBlockNumber) =
+        (address[] memory outTokens, uint[] memory tokenInAmounts,) =
             vault.getPoolTokens(poolOut.getPoolId());
         // Transfer v1 BPTs to proxy
         poolIn.transferFrom(msg.sender, address(this), poolInAmount);
