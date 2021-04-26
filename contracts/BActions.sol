@@ -397,14 +397,21 @@ contract BActions {
         // 1) find the lowest UserBalance-to-PoolBalance ratio
         // 2) multiply by this ratio to get in amounts
         uint lowestRatio = uint(-1);
+        uint lowestRatioToken = 0;
         for (uint i = 0; i < outTokens.length; ++i) {
             uint ratio = 1 ether * ERC20(outTokens[i]).balanceOf(address(this)) / tokenInAmounts[i];
             if (ratio < lowestRatio) {
                 lowestRatio = ratio;
+                lowestRatioToken = i;
             }
         }
         for (uint i = 0; i < outTokens.length; ++i) {
-            tokenInAmounts[i] = tokenInAmounts[i] * lowestRatio / 1 ether;
+            // Keep original amount for "bottleneck" token to avoid dust
+            if (lowestRatioToken == i) {
+                tokenInAmounts[i] = ERC20(outTokens[i]).balanceOf(address(this));
+            } else {
+                tokenInAmounts[i] = tokenInAmounts[i] * lowestRatio / 1 ether;
+            }
         }
         // Join v2 pool and transfer v2 BPTs to user
         bytes memory userData = abi.encode(
