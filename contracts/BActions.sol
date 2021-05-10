@@ -385,8 +385,8 @@ contract BActions {
         address[] memory tokens = poolIn.getFinalTokens();
         (address[] memory outTokens, uint[] memory tokenInAmounts,) =
             vault.getPoolTokens(poolOut.getPoolId());
-        require((tokens[0] == outTokens[0]) || (tokens[0] == outTokens[1]), "ERR_TOKENS_MISMATCH");
-        require((tokens[1] == outTokens[0]) || (tokens[1] == outTokens[1]), "ERR_TOKENS_MISMATCH");
+        require((tokens[0] == outTokens[0]) || (tokens[0] == outTokens[1]));
+        require((tokens[1] == outTokens[0]) || (tokens[1] == outTokens[1]));
         // Transfer v1 BPTs to proxy
         poolIn.transferFrom(msg.sender, address(this), poolInAmount);
         // Exit v1 pool
@@ -447,8 +447,8 @@ contract BActions {
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
         (address[] memory outTokens,,) = vault.getPoolTokens(poolOut.getPoolId());
-        require((tokens[0] == outTokens[0]) || (tokens[0] == outTokens[1]), "ERR_TOKENS_MISMATCH");
-        require((tokens[1] == outTokens[0]) || (tokens[1] == outTokens[1]), "ERR_TOKENS_MISMATCH");
+        require((tokens[0] == outTokens[0]) || (tokens[0] == outTokens[1]));
+        require((tokens[1] == outTokens[0]) || (tokens[1] == outTokens[1]));
         // Transfer v1 BPTs to proxy
         poolIn.transferFrom(msg.sender, address(this), poolInAmount);
         // Exit v1 pool
