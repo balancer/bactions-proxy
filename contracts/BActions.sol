@@ -471,13 +471,6 @@ contract BActions {
             msg.sender,
             request
         );
-        // Send missing tokens back
-        for (uint i = 0; i < tokens.length; i++) {
-            ERC20 token = ERC20(tokens[i]);
-            if (token.balanceOf(address(this)) > 0) {
-                require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-            }
-        }
     }
     
     // --- Internals ---
