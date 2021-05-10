@@ -14,9 +14,9 @@ import "./BalancerOwnable.sol";
 // Interfaces
 
 // Libraries
+import "../common/SafeApprove.sol";
 import { RightsManager } from "./RightsManager.sol";
 import "./SmartPoolManager.sol";
-import "./SafeApprove.sol";
 
 // Contracts
 

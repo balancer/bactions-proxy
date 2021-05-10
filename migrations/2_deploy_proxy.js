@@ -4,8 +4,10 @@ const CRPFactory = artifacts.require('CRPFactory');
 const BalancerSafeMath = artifacts.require('BalancerSafeMath');
 const BActions = artifacts.require('BActions');
 const BFactory = artifacts.require('BFactory');
+const BalancerPool = artifacts.require('BalancerPool');
+const Vault = artifacts.require('Vault');
 
-module.exports = async function(deployer, network, accounts) {
+module.exports = async function(deployer, network) {
     if (network == 'development' || network == 'soliditycoverage') {
         await deployer.deploy(RightsManager);
         await deployer.deploy(SmartPoolManager);
@@ -15,8 +17,10 @@ module.exports = async function(deployer, network, accounts) {
         await deployer.link(BalancerSafeMath, CRPFactory);
         await deployer.link(RightsManager, CRPFactory);
         await deployer.link(SmartPoolManager, CRPFactory);
-
         await deployer.deploy(CRPFactory);
+
+        await deployer.deploy(Vault);
+        await deployer.deploy(BalancerPool);
 
         await deployer.deploy(BActions, BFactory.address);
     } else if (network == 'kovan-fork' || network == 'kovan') {

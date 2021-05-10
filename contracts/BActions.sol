@@ -34,6 +34,7 @@ abstract contract AbstractPool is ERC20, BalancerOwnable {
     function joinswapExternAmountIn(
         address tokenIn, uint tokenAmountIn, uint minPoolAmountOut
     ) external virtual returns (uint poolAmountOut);
+    function exitPool(uint poolAmountIn, uint[] calldata minAmountsOut) external virtual;
 }
 
 abstract contract BPool is AbstractPool {
@@ -49,6 +50,29 @@ abstract contract BPool is AbstractPool {
 
 abstract contract BFactory {
     function newBPool() external virtual returns (BPool);
+}
+
+abstract contract BalancerPool is ERC20 {
+    function getPoolId() external view virtual returns (bytes32);
+
+    enum JoinKind { INIT, EXACT_TOKENS_IN_FOR_BPT_OUT }
+}
+
+abstract contract Vault {
+    struct JoinPoolRequest {
+        address[] assets;
+        uint256[] maxAmountsIn;
+        bytes userData;
+        bool fromInternalBalance;
+    }
+
+    function joinPool(
+        bytes32 poolId,
+        address sender,
+        address recipient,
+        JoinPoolRequest calldata request
+    ) external virtual;
+    function getPoolTokens(bytes32 poolId) external view virtual returns (address[] memory, uint[] memory, uint256);
 }
 
 abstract contract ConfigurableRightsPool is AbstractPool {
@@ -347,16 +371,125 @@ contract BActions {
     ) external {
         crp.removeWhitelistedLiquidityProvider(provider);
     }
+
+    // --- Migration ---
+
+    function migrateProportionally(
+        Vault vault,
+        BPool poolIn,
+        uint poolInAmount,
+        uint[] calldata  tokenOutAmountsMin,
+        BalancerPool poolOut,
+        uint poolOutAmountMin
+    ) external {
+        address[] memory tokens = poolIn.getFinalTokens();
+        (address[] memory outTokens, uint[] memory tokenInAmounts,) =
+            vault.getPoolTokens(poolOut.getPoolId());
+        require(tokens.length == 2);
+        require(outTokens.length == 2);
+        require((tokens[0] == outTokens[0]) || (tokens[0] == outTokens[1]));
+        require((tokens[1] == outTokens[0]) || (tokens[1] == outTokens[1]));
+        // Transfer v1 BPTs to proxy
+        poolIn.transferFrom(msg.sender, address(this), poolInAmount);
+        // Exit v1 pool
+        poolIn.exitPool(poolInAmount,  tokenOutAmountsMin);
+        // Approve each token to v2 vault
+        for (uint i = 0; i < tokens.length; i++) {
+            _safeApprove(ERC20(tokens[i]), address(vault), uint(-1));
+        }
+        // Calculate amounts for even join
+        // 1) find the lowest UserBalance-to-PoolBalance ratio
+        // 2) multiply by this ratio to get in amounts
+        uint lowestRatio = uint(-1);
+        uint lowestRatioToken = 0;
+        for (uint i = 0; i < outTokens.length; ++i) {
+            uint ratio = 1 ether * ERC20(outTokens[i]).balanceOf(address(this)) / tokenInAmounts[i];
+            if (ratio < lowestRatio) {
+                lowestRatio = ratio;
+                lowestRatioToken = i;
+            }
+        }
+        for (uint i = 0; i < outTokens.length; ++i) {
+            // Keep original amount for "bottleneck" token to avoid dust
+            if (lowestRatioToken == i) {
+                tokenInAmounts[i] = ERC20(outTokens[i]).balanceOf(address(this));
+            } else {
+                tokenInAmounts[i] = tokenInAmounts[i] * lowestRatio / 1 ether;
+            }
+        }
+        // Join v2 pool and transfer v2 BPTs to user
+        bytes memory userData = abi.encode(
+            BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
+            tokenInAmounts,
+            poolOutAmountMin
+        );
+        Vault.JoinPoolRequest memory request = Vault.JoinPoolRequest(outTokens, tokenInAmounts, userData, false);
+        vault.joinPool(
+            poolOut.getPoolId(),
+            address(this),
+            msg.sender,
+            request
+        );
+        // Send "change" back
+        for (uint i = 0; i < tokens.length; i++) {
+            ERC20 token = ERC20(tokens[i]);
+            if (token.balanceOf(address(this)) > 0) {
+                require(token.transfer(msg.sender, token.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
+            }
+        }
+    }
+
+    function migrateAll(
+        Vault vault,
+        BPool poolIn,
+        uint poolInAmount,
+        uint[] calldata tokenOutAmountsMin,
+        BalancerPool poolOut,
+        uint poolOutAmountMin
+    ) external {
+        address[] memory tokens = poolIn.getFinalTokens();
+        (address[] memory outTokens,,) = vault.getPoolTokens(poolOut.getPoolId());
+        require(tokens.length == 2);
+        require(outTokens.length == 2);
+        require((tokens[0] == outTokens[0]) || (tokens[0] == outTokens[1]));
+        require((tokens[1] == outTokens[0]) || (tokens[1] == outTokens[1]));
+        // Transfer v1 BPTs to proxy
+        poolIn.transferFrom(msg.sender, address(this), poolInAmount);
+        // Exit v1 pool
+        poolIn.exitPool(poolInAmount, tokenOutAmountsMin);
+        // Approve each token to v2 vault
+        for (uint i = 0; i < tokens.length; i++) {
+            _safeApprove(ERC20(tokens[i]), address(vault), uint(-1));
+        }
+        // Join v2 pool and transfer v2 BPTs to user
+        uint[] memory tokenInAmounts = new uint[](outTokens.length);
+        for (uint i = 0; i < outTokens.length; ++i) {
+            tokenInAmounts[i] = ERC20(outTokens[i]).balanceOf(address(this));
+        }
+
+        bytes memory userData = abi.encode(
+            BalancerPool.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT,
+            tokenInAmounts,
+            poolOutAmountMin
+        );
+        Vault.JoinPoolRequest memory request = Vault.JoinPoolRequest(outTokens, tokenInAmounts, userData, false);
+        vault.joinPool(
+            poolOut.getPoolId(),
+            address(this),
+            msg.sender,
+            request
+        );
+    }
     
     // --- Internals ---
-    
+
     function _safeApprove(ERC20 token, address spender, uint amount) internal {
         if (token.allowance(address(this), spender) > 0) {
             token.approve(spender, 0);
         }
         token.approve(spender, amount);
     }
-    
+
     function _join(
         AbstractPool pool,
         address[] memory tokens,
