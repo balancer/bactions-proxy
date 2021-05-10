@@ -385,6 +385,8 @@ contract BActions {
         address[] memory tokens = poolIn.getFinalTokens();
         (address[] memory outTokens, uint[] memory tokenInAmounts,) =
             vault.getPoolTokens(poolOut.getPoolId());
+        require(tokens.length == 2);
+        require(outTokens.length == 2);
         require((tokens[0] == outTokens[0]) || (tokens[0] == outTokens[1]));
         require((tokens[1] == outTokens[0]) || (tokens[1] == outTokens[1]));
         // Transfer v1 BPTs to proxy
@@ -447,6 +449,8 @@ contract BActions {
     ) external {
         address[] memory tokens = poolIn.getFinalTokens();
         (address[] memory outTokens,,) = vault.getPoolTokens(poolOut.getPoolId());
+        require(tokens.length == 2);
+        require(outTokens.length == 2);
         require((tokens[0] == outTokens[0]) || (tokens[0] == outTokens[1]));
         require((tokens[1] == outTokens[0]) || (tokens[1] == outTokens[1]));
         // Transfer v1 BPTs to proxy
